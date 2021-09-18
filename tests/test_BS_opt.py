@@ -9,25 +9,25 @@ import pytest
 
 
 def test_BS_value():
-  c = options.CallOption(110, datetime.datetime(2021, 10, 15), .5, 100)
-  p = options.PutOption(110, datetime.datetime(2021, 10, 15), .5, 100)
-  assert c.BSprice(t=.5) == 10.531783818155567
-  assert p.BSprice(t=.5) == 19.709869848260794
+  c = options.CallOption(110, expiry=0.5, vol=.5, und_bid=100, und_ask=100)
+  p = options.PutOption(110, expiry=0.5, vol=.5, und_bid=100, und_ask=100)
+  assert c.BSprice() == 10.531783818155567
+  assert p.BSprice() == 19.709869848260794
 
   assert c.intrinsic_val() == 0.0
   assert p.intrinsic_val() == 10.0
-  assert c.extrinsic_val('BSprice', t=.5) == 10.531783818155567
-  assert p.extrinsic_val('BSprice', t=0.5) == 9.709869848260794
+  assert c.extrinsic_val('BSprice') == 10.531783818155567
+  assert p.extrinsic_val('BSprice') == 9.709869848260794
 
 
 def test_IV():
-  c = options.CallOption(110, datetime.datetime(2021, 10, 15), .75, 100)
-  np.testing.assert_allclose(c.IV(10.531783818155567, t=.5), 0.5, atol=.0001)
+  c = options.CallOption(110, expiry=0.5, vol=.75, und_bid=100, und_ask=100)
+  np.testing.assert_allclose(c.IV(10.531783818155567), 0.5, atol=.0001)
 
 
 def test_greeks():
-  c = options.CallOption(110, expiry=.1, und_price=100, vol=.5, r=.015)
-  p = options.PutOption(110, expiry=0.1, und_price=100, vol=.5, r=.015)
+  c = options.CallOption(110, expiry=.1, und_bid=100, und_ask=100, vol=.5, r=.015)
+  p = options.PutOption(110, expiry=0.1, und_bid=100, und_ask=100, vol=.5, r=.015)
   
   assert pytest.approx(c.gamma(), abs=.0001) == .02211
   assert pytest.approx(p.gamma(), abs=.0001) == .02211
