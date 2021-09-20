@@ -84,10 +84,14 @@ class Option:
             price = self.mid()
             if price < self.intrinsic_val():
                 price = np.mean([self.intrinsic_val(), self.ask()])
-        sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t) - price,
-                          method='bisect',
-                          bracket=(.0001, 3))
-        return sol.root
+        try:
+            sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t) - price,
+                            method='bisect',
+                            bracket=(.0001, 3))
+            return sol.root
+        except ValueError as e:
+            print("Warning:", e)
+            return np.nan
 
     def gamma(self, vol=None, t=None, r=None, und_price=None):
         """
@@ -123,7 +127,11 @@ class Option:
         """
         https://en.wikipedia.org/wiki/Moneyness
         """
-        return (np.log(self.und_mid() / self._strike) + self._r * self.t_expiry()) / self._vol / np.sqrt(self.t_expiry())
+        if not np.isfinite(self._vol):
+            vol = self.IV()
+        else:
+            vol = self._vol
+        return (np.log(self.und_mid() / self._strike) + self._r * self.t_expiry()) / vol / np.sqrt(self.t_expiry())
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f}>"
