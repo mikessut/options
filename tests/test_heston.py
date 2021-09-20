@@ -30,17 +30,17 @@ def plot_skew():
 
     tau = 0.1
     r = .015
-    und_price = 100
-    v = 0.12**2
-    v_avg = 0.18**2
-    eta = 0.33147
-    lam = 1.98937
-    rho = 0.0258519
-    rho = -.5
+    und_price = 3000
+    v = .0174  #1.2**2
+    v_avg = .0354  # 1**2
+    eta = .4
+    lam = 1.3
+    rho = -.72
 
-    strikes = np.linspace(80, 120, 15)  # [90, 95, 100, 105, 110]
+    strikes = np.linspace(2000, 5000, 15)  # [90, 95, 100, 105, 110]
 
-    for tau in [.1, .2, .3]:
+    plt.figure()
+    for tau in [.1, .5, 1]:
         m = []
         iv = []
 
