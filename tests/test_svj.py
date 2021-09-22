@@ -1,4 +1,4 @@
-from options import CallOption
+from options import CallOption, PutOption, put_parity
 import pytest
 from options.svj import call, skew
 import numpy as np
@@ -105,3 +105,44 @@ def test_alex(strike, expected):
 
     call_price = call(strike, und_price, lam, eta, rho, v_avg, v, lamJ, alpha, delta, T)
     assert pytest.approx(call_price, abs=.0001) == expected
+
+
+
+def plot_skew():
+
+    und_price = 3000
+    v = 1
+    v_avg = 1
+    rho = -.7
+    eta = 3
+    lam = 5
+    alpha = 0
+    delta = .4
+    lamJ = .3
+    r = 0
+
+    strikes = np.linspace(2000, 5000, 15)  # [90, 95, 100, 105, 110]
+
+    plt.figure()
+    for T in [.02, .1, .2]:
+        m = []
+        iv = []
+        ivp = []
+
+        for strike in strikes:
+            call_price = call(strike, und_price, lam, eta, rho, v_avg, v, lamJ, alpha, delta, T)
+            c = CallOption(strike, T,
+                            und_bid=und_price, und_ask=und_price, r=r,
+                            bid=call_price, ask=call_price)
+            put_price = put_parity(und_price, strike, call_price, r, T)
+            p = PutOption(strike, T,
+                            und_bid=und_price, und_ask=und_price, r=r,
+                            bid=put_price, ask=put_price)
+            iv.append(c.IV())
+            ivp.append(p.IV())
+            m.append(c.moneyness())
+
+        plt.plot(strikes, iv)
+        plt.plot(strikes, ivp)
+
+    plt.show()

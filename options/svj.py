@@ -1,5 +1,5 @@
 """
-dX = mu*S*dt + sqrt(v)*s*dZ1 + (exp(alpha+delta*eps) - 1)*S*dq
+dS = mu*S*dt + sqrt(v)*S*dZ1 + (exp(alpha+delta*eps) - 1)*S*dq
 dv = -lam*(v-v_avg)*dt + eta*sqrt(v)*dZ2
 """
 import numpy as np

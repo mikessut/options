@@ -73,6 +73,9 @@ class Option:
         else:
             return self._expiry
 
+    def strike(self):
+        return self._strike
+
     def BScalc(self, vol, t, r, und_price):
         d1 = 1 / vol / np.sqrt(t) * (np.log(und_price /
                                             self._strike) + (r + vol**2 / 2) * t)
@@ -123,7 +126,7 @@ class Option:
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return self.und_mid() * norm.pdf(d1) * np.sqrt(t)
 
-    def moneyness(self):
+    def std_moneyness(self):
         """
         https://en.wikipedia.org/wiki/Moneyness
         """
@@ -132,6 +135,10 @@ class Option:
         else:
             vol = self._vol
         return (np.log(self.und_mid() / self._strike) + self._r * self.t_expiry()) / vol / np.sqrt(self.t_expiry())
+
+    def moneyness(self):
+        F = self.und_mid() * np.exp(self._r * self.t_expiry())
+        return np.log(F / self._strike)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f}>"
@@ -238,3 +245,11 @@ class Quote:
 
     def ask(self):
         return self._ask
+
+
+def put_parity(und_price, strike, call_price, r, T):
+    return call_price - und_price + strike * np.exp(-r * T)
+
+
+def call_parity(und_price, strike, put_price, r, T):
+    return und_price - strike * np.exp(-r * T) + put_price
