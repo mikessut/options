@@ -14,7 +14,9 @@ class Option:
                  und_ask: float = np.nan,
                  r: float = .015,
                  bid: float = np.nan,
-                 ask: float = np.nan):
+                 ask: float = np.nan,
+                 und_price=None,
+                 opt_price=None):
         """
         :param strike: Option strike
         :param expiry: Either a datetime object of the expiry or a float
@@ -33,6 +35,14 @@ class Option:
 
         self._bid = bid
         self._ask = ask
+
+        if und_price is not None:
+            self._und_bid = und_price
+            self._und_ask = und_price
+
+        if opt_price is not None:
+            self._bid = opt_price
+            self._ask = opt_price
 
     def set_bid(self, val):
         self._bid = val

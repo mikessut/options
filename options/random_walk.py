@@ -96,7 +96,7 @@ class SVJ(StochasticVolBase):
         Z1, Z2 = corr_rand(self._rho)
 
         dvar = -self._lam * (self._var[-1] - self._v_avg) * self._dt \
-               +self._eta * np.sqrt(self._var[-1]) * self._sqrt_dt * Z2
+               +self._eta * np.sqrt(self._var[-1]) * self._dt * Z2
 
         var = self._var[-1] + dvar
         var = max(self._min_var, var)

@@ -49,7 +49,7 @@ class OptionPosition(Position):
             return self._qty * self._opt.BSprice(vol, t, r, und_price)
 
     def __repr__(self) -> str:
-        return f"<OptionPosition of {self._opt} x {self._qty}>"
+        return f"<{self.__class__.__name__} of {self._opt} x {self._qty}>"
 
 
 class UnderlyingPosition(Position):
@@ -77,7 +77,7 @@ class UnderlyingPosition(Position):
             return self._qty * und_price
 
     def __repr__(self) -> str:
-        return f"<UnderlyingPosition qty: {self._qty}>"
+        return f"<{self.__class__.__name__} qty: {self._qty}>"
 
 
 class Portfolio:
@@ -104,7 +104,7 @@ class Portfolio:
         return results
 
     def __repr__(self) -> str:
-        s = '<Portfolio\n'
+        s = '<{self.__class__.__name__}\n'
         for p in self._positions:
             s += f'  {p}\n'
         s += '>'
