@@ -8,6 +8,7 @@ Follows the derivation in Jim Gatheral's "The Volatility Surface" pg. 19.
 """
 import numpy as np
 from scipy.integrate import quad
+import options
 
 
 def alpha(u, j):
@@ -73,3 +74,8 @@ def call(strike, lam, rho, eta, tau, v, v_avg, r, und_price):
     F = und_price * np.exp(r * tau)
     x = np.log(F / strike)
     return strike * (np.exp(x) * P(x, lam, rho, eta, 1, tau, v, v_avg) - P(x, lam, rho, eta, 0, tau, v, v_avg))
+
+
+def put(strike, lam, rho, eta, tau, v, v_avg, r, und_price):
+    call_price = call(strike, lam, rho, eta, tau, v, v_avg, r, und_price)
+    return options.put_parity(und_price, strike, call_price, r, tau)

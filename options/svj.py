@@ -5,6 +5,7 @@ dv = -lam*(v-v_avg)*dt + eta*sqrt(v)*dZ2
 import numpy as np
 from scipy.integrate import quad
 from options.heston import C, D
+import options
 
 
 def psi(u, alpha, delta, lamJ):
@@ -25,6 +26,11 @@ def call(strike, und_price, lam, eta, rho, v_avg, v, lamJ, alpha, delta, T):
     k = np.log(strike / und_price)
     integral = quad(integrand, 0, np.inf, args=(lam, eta, rho, v_avg, v, lamJ, alpha, delta, k, T))
     return und_price - np.sqrt(und_price * strike) / np.pi * integral[0]
+
+
+def put(strike, und_price, lam, eta, rho, v_avg, v, lamJ, alpha, delta, T):
+    call_price = call(strike, und_price, lam, eta, rho, v_avg, v, lamJ, alpha, delta, T)
+    return options.put_parity(und_price, strike, call_price, 0, T)
 
 
 def skew_integrand(u, lam, eta, rho, v_avg, v, lamJ, alpha, delta, T):

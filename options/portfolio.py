@@ -104,7 +104,7 @@ class Portfolio:
         return results
 
     def __repr__(self) -> str:
-        s = '<{self.__class__.__name__}\n'
+        s = f'<{self.__class__.__name__}\n'
         for p in self._positions:
             s += f'  {p}\n'
         s += '>'
