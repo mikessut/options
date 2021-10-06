@@ -53,9 +53,16 @@ def simulate_auto_corr(rhos, num_samples):
         cov_mat += np.diag(np.ones((len(rhos)-n-1, )) * p, -n-1)
     
     L = np.linalg.cholesky(cov_mat)
+    #print(L)
+    U = np.zeros((len(rhos), num_samples))
+    U[-1, :] = np.random.randn(num_samples)
+    for n in range(1, len(rhos)):
+        U[len(rhos) - n - 1, :] = np.roll(U[-1, :], n)
 
-    U = np.random.randn(num_samples)
-    H = np.zeros((num_samples, ))
+    #print(U)
+    return L[-1, :].dot(U)
+    # U = np.random.randn(num_samples)
+    # H = np.zeros((num_samples, ))
 
     for n in range(num_samples):
         if n < len(rhos):
@@ -65,37 +72,102 @@ def simulate_auto_corr(rhos, num_samples):
     return H
 
 
-def simulate_xcorr(rho_forward, rho_backward, num_samples):
+def _xcorr_cov_mat(rho_g, rho_h, rho_forward, rho_backward):
     """
+    Simulate both auto correlation and cross correlation.
 
+    Example of the cross corr terms. (Autocorr terms not shown.)
+        g      g     g
+        -1     0     1
+
+        h      h     h
+        -1     0     1
+
+    p        = [p     , p     , ...]  = [p  , p  , ...]
+     forward     g0,h0   g0,h1            f0   f1
+
+    p         = [p     , p      , ...] = [p  , p  , ...]
+     backward    g0,h0   g0,h-1           b0   b1
+
+    p   = p
+    f0    b0
+
+
+         g    g   g   h   h   h
+          -1   0   1   -1  0   1
+        ┌─────────────────────────
+        │
+    g   │             p   p    p
+     -1 │              0   f1   f2
+        │
+    g   │             p   p    p
+     0  │              b1  0    f1
+        │
+    g   │             p   p    p
+     1  │              b2  b1   0
+        │
+    h   │ p   p   p
+     -1 │  0   b1  b2
+        │
+    h   │ p   p   p
+     0  │  f1  0   b1
+        │  
+    h   │ p   p   p
+     1  │  f2  f1  0
     """
-    assert rho_forward[0] == 1.0
-    assert rho_backward[0] == 1.0
+    assert rho_forward[0] == rho_backward[0]
     assert len(rho_forward) == len(rho_backward)
+    assert len(rho_g) == len(rho_h)
+    assert len(rho_g) == len(rho_forward)
     lrho = len(rho_forward)
 
-    L = []
-    for rhos in [rho_forward, rho_backward]:
-        cov_mat = np.eye(len(rhos))
+    cov_mat = np.zeros((2*lrho, 2*lrho))
+
+    # Autocorrelations
+    for rhos, idx in zip([rho_g, rho_h], 
+                         [(slice(0, lrho), slice(0, lrho)), 
+                          (slice(lrho, 2*lrho), slice(lrho, 2*lrho))]):
+        cov_mat[idx] = np.eye(lrho)
         for n, p in enumerate(rhos[1:]):
-            cov_mat += np.diag(np.ones((len(rhos)-n-1, )) * p, n+1)
-            cov_mat += np.diag(np.ones((len(rhos)-n-1, )) * p, -n-1)
-        L.append(np.linalg.cholesky(cov_mat))
+            cov_mat[idx] += np.diag(np.ones((len(rhos)-n-1, )) * p, n+1)
+            cov_mat[idx] += np.diag(np.ones((len(rhos)-n-1, )) * p, -n-1)
+
+    # Crosscorrelations
+    idx_ur = (slice(0, lrho), slice(lrho, 2*lrho))
+    idx_ll = (slice(lrho, 2*lrho), slice(0, lrho))
+
+    cov_mat[idx_ur] += np.eye(lrho) * rho_forward[0]
+    cov_mat[idx_ll] += np.eye(lrho) * rho_forward[0]
+    for n in range(1, lrho):
+        cov_mat[idx_ur] += np.diag(np.ones((lrho-n, )) * rho_forward[n], n)
+        cov_mat[idx_ur] += np.diag(np.ones((lrho-n, )) * rho_backward[n], -n)
+        cov_mat[idx_ll] += np.diag(np.ones((lrho-n, )) * rho_backward[n], n)
+        cov_mat[idx_ll] += np.diag(np.ones((lrho-n, )) * rho_forward[n], -n)
+    return cov_mat
+
+def simulate_xcorr(rho_g, rho_h, rho_forward, rho_backward, num_samples):
+    """
+
+    """
+    assert len(rho_g) % 2 == 1, "Length of correlations must be odd"
+    cov_mat = _xcorr_cov_mat(rho_g, rho_h, rho_forward, rho_backward)
+    lrho = len(rho_g)
+    
+    L = np.linalg.cholesky(cov_mat)
 
     U = np.random.randn(num_samples)
-    #V = np.random.randn(num_samples)
-    V = U
-    A = np.zeros((num_samples, ))
-    B = np.zeros((num_samples, ))
+    V = np.random.randn(num_samples)
 
-    for n in range(num_samples):
-        if n < lrho:
-            A[n] = L[0][n, :n+1].dot(U[:n+1])
-            B[n] = L[1][-1, ::-1].dot(V[n:n+lrho])
-        elif n > (num_samples - lrho):
-            A[n] = L[0][-1, :].dot(U[n-(lrho-1):n+1])
-            B[n] = L[1][num_samples-n-1, :num_samples-n].dot(V[n:])
-        else:
-            A[n] = L[0][-1, :].dot(U[n-(lrho-1):n+1])
-            B[n] = L[1][-1, ::-1].dot(V[n:n+lrho])
-    return A, B, L
+    GH = np.zeros((2 * lrho, num_samples))
+
+    # Does lrho need to be odd? Not sure...
+    GH[lrho // 2, :] = U
+    GH[lrho + lrho // 2, :] = V
+
+    for n in range(1, lrho//2+1):
+        GH[lrho // 2 - n, :] = np.roll(GH[lrho // 2, :], n)
+        GH[lrho // 2 + n, :] = np.roll(GH[lrho // 2, :], -n)
+        GH[lrho + lrho // 2 - n, :] = np.roll(GH[lrho + lrho // 2, :], n)
+        GH[lrho + lrho // 2 + n, :] = np.roll(GH[lrho + lrho // 2, :], -n)
+
+    return L[[lrho // 2, lrho + lrho // 2], :].dot(GH)
