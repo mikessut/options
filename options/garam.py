@@ -8,7 +8,7 @@ http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1428555
 from operator import le
 import numpy as np
 from scipy.stats import kurtosis, skew, moment
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, root_scalar
 
 
 def normalize_hammer(x, p1, p2, p3):
@@ -16,6 +16,12 @@ def normalize_hammer(x, p1, p2, p3):
     Used to make the log squared returns normal.
     """
     return x * (1 + p1 * (np.pi / 2 + np.arctan(p2 * (x + p3))))
+
+
+def inv_hammer(y, p1, p2, p3):
+    soln = root_scalar(lambda x: y - normalize_hammer(x, p1, p2, p3), x0=0, x1=1)
+    if soln.converged:
+        return soln.root
 
 
 def non_normal_errs(X, rsq):
@@ -171,3 +177,66 @@ def simulate_xcorr(rho_g, rho_h, rho_forward, rho_backward, num_samples):
         GH[lrho + lrho // 2 + n, :] = np.roll(GH[lrho + lrho // 2, :], -n)
 
     return L[[lrho // 2, lrho + lrho // 2], :].dot(GH)
+
+
+def sim_garam():
+    """
+    r = np.log(today / yesterday)
+    x = np.log(r**2 / R**2) = np.log(r**2) + mean_offset
+    y = x*(1+p1*(pi/2 + atan(p2*(x+p3))))
+
+    z normal and correlated to y
+
+    r = I * r
+    I = sign(z)
+    """
+    mean_offset, p1, p2, p3 = (7.310869029875786,
+                               1.4680161660760758,
+                               0.15365361394057306,
+                               -2.1170813844931735)
+    y_std = 6.610029945063
+    z_acorr = np.zeros((13, ))
+    z_acorr[0] = 1
+    y_acorr = [1., 0.15609107, 0.1217776 , 0.14139572, 0.11028372,
+               0.10320274, 0.1252665 , 0.14323801, 0.07744252, 0.05458113,
+               0.08284051, 0.07172931, 0.06604487]
+    zy_forward = [0.058317939998810915,
+                  0.042898529214825676,
+                  0.006864844106183375,
+                  0.007019942397415309,
+                  0.0018073768467972565,
+                  -0.0009463001559640069,
+                  0.015057954783676279,
+                  0.04183635088839025,
+                  -0.015527960543866933,
+                  -0.0003720180721489296,
+                  -0.03151007791432902,
+                  0.050994869800271264,
+                  -0.011975136914581923]
+    zy_backward = [0.058317939998810915,
+                   -0.028555262080963626,
+                   0.004473658237229506,
+                   0.0020374398456827134,
+                   0.0034062578251732104,
+                   0.04092458378189857,
+                   -0.006354430680190513,
+                   -0.005450535011509913,
+                   0.034374758133681536,
+                   0.02857448662093088,
+                   0.0010408983590319903,
+                   -0.00996683831507115,
+                   0.00666669951144906]
+    
+    AB = simulate_xcorr(z_acorr, y_acorr, zy_backward, zy_forward, 2000)
+    z = AB[0, :]
+    y = AB[1, :] * y_std
+    x = np.vectorize(lambda y: inv_hammer(y, p1, p2, p3))(y)
+
+    rsq = np.exp(x - mean_offset)
+    print(f"rsq mean: {rsq.mean()}")
+    r = np.sign(z) * np.sqrt(rsq)
+    print(f"r mean: {r.mean()}")
+
+    #f, ax = plt.subplots(2, 1, sharex=True)
+    ax[0].plot(rsq)
+    ax[1].plot(14 * np.exp(np.cumsum(r)))

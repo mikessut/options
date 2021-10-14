@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from statsmodels.graphics.tsaplots import plot_acf
 from statsmodels.tsa.stattools import acf, ccf
+from scipy.stats import pearsonr
 import pytest
 
 
@@ -35,15 +36,31 @@ def test_normalization():
     print(X)
     mean_offset, p1, p2, p3 = X.x
 
-    idx = np.abs(df.r2) > .0000001
-    x = np.log(df.r2[idx]) + mean_offset
-    y = normalize_hammer(x, p1, p2, p3)
+    x = np.log(df.r2) + mean_offset  # zero mean, std = 2.6
+    y = normalize_hammer(x, p1, p2, p3)  # zero mean, std = 6.6
 
-    df.loc[idx, 'x'] = x
-    df.loc[idx, 'y'] = y
+    df.loc[:, 'x'] = x
+    df.loc[:, 'y'] = y
 
     plt.figure()
     plot_vs_std_norm(y / y.std())
+
+    # Correlations
+    plot_acf(y)
+    plt.title('y - normed vol')
+
+    plot_acf(df.lr)
+    plt.title('z (aka lr)')
+
+    plt.figure()
+    plt.xcorr(df.lr, y)
+
+    # similar xcorr plot
+    plt.figure()
+    lags = np.arange(-9, 10)
+    plt.stem(lags, [np.corrcoef(df.lr, np.roll(y, n))[0, 1] for n in lags])
+    # equivalently [pearsonr(df.lr, np.roll(y, n))[0] for n in lags]
+
     return df, X
 
 
