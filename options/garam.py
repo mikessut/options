@@ -4,6 +4,9 @@ https://quant.stackexchange.com/questions/21842/calibrating-stochastic-volatilit
 
 Which leads to this paper on GARAM model:
 http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1428555
+
+More recent paper from Vivek Kapoor:
+https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3761304
 """
 from operator import le
 import numpy as np
@@ -151,8 +154,58 @@ def _xcorr_cov_mat(rho_g, rho_h, rho_forward, rho_backward):
         cov_mat[idx_ll] += np.diag(np.ones((lrho-n, )) * rho_forward[n], -n)
     return cov_mat
 
-def simulate_xcorr(rho_g, rho_h, rho_forward, rho_backward, num_samples):
+
+def _seed_predictors(g_seeds, h_seeds, L):
     """
+    
+    +-    -+   +-                        -+ +-    -+
+    |  g   |   | l                        | |  u   |
+    |   -1 |   |  00                      | |   -1 |
+    |      |   |                          | |      |
+    |  g   |   | l   l                    | |  u   |
+    |   0  |   |  10  11                  | |   0  |
+    |      |   |                          | |      |
+    |  g   |   | l   l   l                | |  u   |
+    |   1  |   |  20  21  22              | |   1  |
+    |      | = |                          | |      |
+    |  h   |   | l   l   l   l            | |  v   |
+    |   -1 |   |  30  31  32  33          | |   -1 |
+    |      |   |                          | |      |
+    |  h   |   | l   l   l   l   l        | |  v   |
+    |   0  |   |  40  41  42  43  44      | |   0  |
+    |      |   |                          | |      |
+    |  h   |   | l   l   l   l   l   l    | |  v   |
+    |   1  |   |  50  51  52  53  54  55  | |   1  |
+    +-    -+   +-                        -+ +-    -+
+
+    Unknowns up1, u0, vp1, v0, g1, h1
+    Random: u1, v1
+
+    g   = u
+     -1    -1
+
+    l   *  g   + l   * u  = g
+     10     -1    11    0    0
+
+    u0 = (g0 - l10*gp1) / l11
+
+    u1 = (g1 - l20*gp1 - l21*g0) / l22
+    """
+    lrho = L.shape[0] // 2
+    Linv = np.linalg.inv(L)
+    up = Linv[:lrho//2+1, :lrho//2+1] @ np.vstack(g_seeds)
+    u = np.vstack([up, np.random.randn(lrho // 2)])
+    g = L[:lrho, :lrho] @ u
+    vp = Linv[lrho:lrho+lrho//2+1, :lrho+lrho//2+1] @ np.vstack([g, np.vstack(h_seeds)])    
+    v = np.vstack([vp, np.random.randn(lrho // 2)])
+    return u, v
+
+
+def simulate_xcorr(rho_g, rho_h, rho_forward, rho_backward, num_samples,
+                   g_seeds=None, h_seeds=None):
+    """
+    :param g_seeds: Realized data in chronological order
+    :param h_seeds: Realized data in chronological order
 
     """
     assert len(rho_g) % 2 == 1, "Length of correlations must be odd"
@@ -160,6 +213,13 @@ def simulate_xcorr(rho_g, rho_h, rho_forward, rho_backward, num_samples):
     lrho = len(rho_g)
     
     L = np.linalg.cholesky(cov_mat)
+
+    if g_seeds is not None:
+        assert len(g_seeds) == len(rho_g)
+        assert len(h_seeds) == len(rho_h)
+
+        u, v
+
 
     U = np.random.randn(num_samples)
     V = np.random.randn(num_samples)

@@ -140,3 +140,27 @@ def test_sim_xcorr():
     generated_rho_forward = [np.corrcoef(AB[0, :], np.roll(AB[1, :], n))[0, 1] for n in range(0, -2, -1)]
     np.testing.assert_allclose(rho_forward, generated_rho_forward, atol=.1)
     np.testing.assert_allclose(rho_backward, generated_rho_backward, atol=.1)
+
+
+def test_seeding():
+    rho_g = [1, .1, .1]
+    rho_h = [1, .2, .01]
+    rho_forward = [-.5, .4, .3]
+    rho_backward = [-.5, -.5, -.4]
+
+    g = [1, 2]
+    h = [2, 3]
+
+    cov_mat = garam._xcorr_cov_mat(rho_g, rho_h, rho_forward, rho_backward)
+    lrho = len(rho_g)
+    
+    L = np.linalg.cholesky(cov_mat)
+
+    u, v = garam._seed_predictors(g, h, L)
+
+    gh = L @ np.vstack([np.vstack(u), np.vstack(v)])
+
+    gsim = gh[:2].flatten()
+    hsim = gh[3:5].flatten()
+    np.testing.assert_allclose(g, gsim)
+    np.testing.assert_allclose(h, hsim)
