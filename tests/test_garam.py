@@ -53,7 +53,7 @@ def test_normalization():
     plt.title('z (aka lr)')
 
     plt.figure()
-    plt.xcorr(df.lr, y)
+    plt.xcorr(df.lr, y, maxlags=40)
 
     # similar xcorr plot
     plt.figure()
