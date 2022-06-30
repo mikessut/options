@@ -1,3 +1,9 @@
+"""
+Simulating correlated noise.
+Imam-Conover method
+https://towardsdatascience.com/journey-to-monte-carlo-mc-simulations-with-correlated-variables-in-python-1aef84d5742d
+https://www.casact.org/sites/default/files/database/forum_06wforum_06w107.pdf
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 
