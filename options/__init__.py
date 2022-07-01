@@ -16,7 +16,8 @@ class Option:
                  bid: float = np.nan,
                  ask: float = np.nan,
                  und_price=None,
-                 opt_price=None):
+                 opt_price=None,
+                 metadata={}):
         """
         :param strike: Option strike
         :param expiry: Either a datetime object of the expiry or a float
@@ -44,6 +45,10 @@ class Option:
             self._bid = opt_price
             self._ask = opt_price
 
+        self._metadata = metadata
+
+        self._model_price = np.nan
+
     def set_bid(self, val):
         self._bid = val
 
@@ -59,6 +64,12 @@ class Option:
     def mid(self) -> float:
         return (self.bid() + self.ask()) / 2
 
+    def set_und_bid(self, val):
+        self._und_bid = val
+
+    def set_und_ask(self, val):
+        self._und_ask = val
+
     def und_mid(self) -> float:
         return (self._und_bid + self._und_ask) / 2
 
@@ -68,11 +79,29 @@ class Option:
     def und_ask(self) -> float:
         return self._und_ask
 
-    def set_und_price(self, val):
-        self._und_price = val
+    def set_model_price(self, val):
+        self._model_price = val
+
+    def model_price(self) -> float:
+        return self._model_price
+
+    def short_excess_value(self):
+        return self.bid() - self.model_price()
+
+    def long_excess_value(self):
+        return self.model_price() - self.ask()
+
+    def long_roi(self):
+        return np.log(self.model_price() / self.ask()) / self.t_expiry()
+
+    # def set_und_price(self, val):
+    #     self._und_price = val
 
     def extrinsic_val(self, price_func='mid', und_price_func='und_mid') -> float:
         return getattr(self, price_func)() - self.intrinsic_val(und_price_func=und_price_func)
+
+    def expiry(self) -> datetime.datetime:
+        return self._expiry
 
     def t_expiry(self) -> float:
         """
@@ -151,7 +180,7 @@ class Option:
         return np.log(F / self._strike)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f}>"
+        return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f} Und: {(self.und_ask() + self.und_bid())/2} Bid/ask: {self.bid()} {self.ask()}>"
 
 
 class PutOption(Option):
@@ -198,6 +227,14 @@ class PutOption(Option):
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return -und_price * norm.pdf(d1) * vol / 2 / np.sqrt(t) + r * self._strike * np.exp(-r * t) * norm.cdf(-d2)
 
+    def short_roi(self):
+        """
+        Cash secured at strike price.
+        """
+        PV = self.strike() - self.bid()
+        FV = self.strike() - self.model_price()
+        return np.log(FV / PV) / self.t_expiry()
+
 
 class CallOption(Option):
 
@@ -242,6 +279,14 @@ class CallOption(Option):
             und_price = self.und_mid()
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return -und_price * norm.pdf(d1) * vol / 2 / np.sqrt(t) - r * self._strike * np.exp(-r * t) * norm.cdf(d2)
+
+    def short_roi(self):
+        """
+        "Covered call" - secured by holding underlying at current undlying price.
+        """
+        PV = self.und_mid() - self.bid()
+        FV = self.und_mid() - self.model_price()
+        return np.log(FV / PV) / self.t_expiry()
 
 
 class Quote:
