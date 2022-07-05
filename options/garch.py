@@ -1,6 +1,8 @@
 import arch
 import numpy as np
 from scipy.optimize import minimize
+from options import portfolio
+import options
 
 
 def calc_garch(w, alpha, beta, lr, var0=None):
@@ -74,8 +76,8 @@ class GARCHMonteCarlo:
         self._p0 = p0
         self._strikes = np.array(strikes, ndmin=1)
         self._days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
-        self._put_prices = np.zeros((len(strikes), len(days_to_expiration)))
-        self._call_prices = np.zeros((len(strikes), len(days_to_expiration)))
+        self._put_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), num_sims))
+        self._call_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), num_sims))
 
         self._var0 = var0
         self._w = w
@@ -93,20 +95,119 @@ class GARCHMonteCarlo:
                                                                      self._alpha,
                                                                      self._beta,
                                                                      self._mu,
-                                                                     self._num_sims)
+                                                                     self._num_sims,
+                                                                    return_avgs=False)
 
     def put(self, strike, days):
         idx_strike = np.where(self._strikes == strike)[0][0]
         idx_days = np.where(self._days_to_expiration == days)[0][0]
-        return self._put_prices[idx_strike, idx_days]
+        return self._put_prices[idx_strike, idx_days, :].mean(), self._put_prices[idx_strike, idx_days, :].std()
 
     def call(self, strike, days):
         idx_strike = np.where(self._strikes == strike)[0][0]
         idx_days = np.where(self._days_to_expiration == days)[0][0]
-        return self._call_prices[idx_strike, idx_days]
+        return self._call_prices[idx_strike, idx_days, :].mean(), self._call_prices[idx_strike, idx_days, :].std()
+
+    def portfolio_expected_value(self, prt: portfolio.Portfolio):
+        prt_returns = np.zeros((self._num_sims,))
+        for pos in prt:
+            if isinstance(pos, portfolio.OptionPosition):
+                if isinstance(pos.option, options.PutOption):
+                    idx_strike = np.where(self._strikes == pos.option.strike)[0][0]
+                    idx_days = np.where(self._days_to_expiration == int(np.round(pos.option.t_expiry()*365.25)))[0][0]
+                    prt_returns += self._put_prices[idx_strike, idx_days, :] * pos.option.multiplier * pos.qty
+                elif isinstance(pos.option, options.CallOption):
+                    idx_strike = np.where(self._strikes == pos.option.strike)[0][0]
+                    idx_days = np.where(self._days_to_expiration == int(np.round(pos.option.t_expiry()*365.25)))[0][0]
+                    prt_returns += self._call_prices[idx_strike, idx_days, :] * pos.option.multiplier * pos.qty
+            else:
+                print("Not handling non-option positions.....")
+        return prt_returns.mean(), prt_returns.std()
+
+    def call_pop(self, basis, strike, days):
+        """
+        This assumes a "long" position. To determine the corresponding short
+        position subtract from 1.  E.g.:
+        Short_position_pop = 1 - call_pop(premium_rcvd, strike, days)
+
+                │               │   /
+                │               │  /
+                │               │ /
+                │               │/
+             0  ├───────────────┼──────────
+                │              /│
+                │             / │
+                ├────────────/  │ POP Area
+                │               │
+
+        """
+        idx_strike = np.where(self._strikes == strike)[0][0]
+        idx_days = np.where(self._days_to_expiration == days)[0][0]
+        idx = self._call_prices[idx_strike, idx_days, :] > basis
+        return sum(idx) / self._num_sims
+
+    def put_pop(self, basis, strike, days):
+        """
+        This assumes a "long" position. To determine the corresponding short
+        position subtract from 1.  E.g.:
+        Short_position_pop = 1 - put_pop(premium_rcvd, strike, days)
+        """
+        idx_strike = np.where(self._strikes == strike)[0][0]
+        idx_days = np.where(self._days_to_expiration == days)[0][0]
+        idx = self._put_prices[idx_strike, idx_days, :] > basis
+        return sum(idx) / self._num_sims
+
+    def pop(self, pos):
+        if isinstance(pos, portfolio.OptionPosition):
+            return self._opt_pop(pos)
+        elif isinstance(pos, portfolio.Portfolio):
+            return self._portfolio_pop(pos)
+
+    def _portfolio_pop(self, prt: portfolio.Portfolio):
+        prt_returns = np.zeros((self._num_sims,))
+        for pos in prt:
+            if isinstance(pos, portfolio.OptionPosition):
+                if isinstance(pos.option, options.PutOption):
+                    idx_strike = np.where(self._strikes == pos.option.strike)[0][0]
+                    idx_days = np.where(self._days_to_expiration == int(np.round(pos.option.t_expiry()*365.25)))[0][0]
+                    prt_returns += self._put_prices[idx_strike, idx_days, :] * pos.option.multiplier * pos.qty
+                elif isinstance(pos.option, options.CallOption):
+                    idx_strike = np.where(self._strikes == pos.option.strike)[0][0]
+                    idx_days = np.where(self._days_to_expiration == int(np.round(pos.option.t_expiry()*365.25)))[0][0]
+                    prt_returns += self._call_prices[idx_strike, idx_days, :] * pos.option.multiplier * pos.qty
+            else:
+                print("Not handling non-option positions.....")
+        basis = 0  # amount it _cost_ to enter position
+        for pos in prt:
+            if isinstance(pos, portfolio.OptionPosition):
+                multiplier = pos.option.multiplier
+            else: 
+                multiplier = 1.0
+            basis += pos.basis * pos.qty * multiplier
+        print(f"basis: {basis} max return: {max(prt_returns - basis)} min return {min(prt_returns - basis)}")
+        idx = prt_returns > basis
+        return sum(idx) / self._num_sims
+
+    def _opt_pop(self, opt_pos: 'portfolio.OptionPosition'):
+        if isinstance(opt_pos.option, options.PutOption):
+            if opt_pos.qty > 0:
+                return self.put_pop(opt_pos.basis, opt_pos.option.strike, int(np.round(opt_pos.option.t_expiry()*365.25)))
+            else:
+                # short position
+                # assert opt_pos.basis < 0, "Something doesn't seem right. Qty is negative but basis is positive???"
+                return 1 - self.put_pop(opt_pos.basis, opt_pos.option.strike, int(np.round(opt_pos.option.t_expiry()*365.25)))
+        elif isinstance(opt_pos.option, options.CallOption):
+            if opt_pos.qty > 0:
+                return self.call_pop(opt_pos.basis, opt_pos.option.strike, int(np.round(opt_pos.option.t_expiry()*365.25)))
+            else:
+                # short position
+                # assert opt_pos.basis < 0, "Something doesn't seem right. Qty is negative but basis is positive???"
+                return 1 - self.call_pop(opt_pos.basis, opt_pos.option.strike, int(np.round(opt_pos.option.t_expiry()*365.25)))
 
     @staticmethod
-    def garch_monte_carlo(p0, strikes, days_to_expiration, var0, w, alpha, beta, mu=0, num_sims=1000):
+    def garch_monte_carlo(p0, strikes, days_to_expiration,
+                          var0, w, alpha, beta, mu=0, num_sims=1000,
+                          return_avgs=True):
 
         strikes = np.array(strikes, ndmin=1)
         days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
@@ -127,4 +228,7 @@ class GARCHMonteCarlo:
                         call_price = 0 if p < strike else p - strike
                         put_prices[m,idx, n] = put_price
                         call_prices[m, idx, n] = call_price
-        return np.mean(call_prices, axis=2), np.mean(put_prices, axis=2)
+        if return_avgs:
+            return np.mean(call_prices, axis=2), np.mean(put_prices, axis=2)
+        else:
+            return call_prices, put_prices

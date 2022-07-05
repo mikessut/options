@@ -1,10 +1,20 @@
 import abc
-from abc import abstractmethod
-from options import Option, Quote
-from typing import List
+from abc import abstractmethod, abstractproperty
+from options import Option, Quote, PutOption, CallOption
+from typing import List, Iterator
+import matplotlib.pyplot as plt
+import numpy as np
 
 
-class Position(abc.ABC):
+class Position:
+
+    def __init__(self, qty: int, basis: float):
+        """
+        qty is negative for a short position
+        basis is always positive????
+        """
+        self._qty = qty
+        self._basis = basis
 
     @abstractmethod
     def delta(self, vol=None, t=None, r=None, und_price=None) -> float:
@@ -18,12 +28,24 @@ class Position(abc.ABC):
     def value(self, vol=None, t=None, r=None, und_price=None) -> float:
         pass
 
+    @property
+    def basis(self) -> float:
+        return self._basis
+
+    @property
+    def qty(self) -> int:
+        return self._qty
+
 
 class OptionPosition(Position):
     
-    def __init__(self, opt: Option, qty: int):
+    def __init__(self, opt: Option, qty: int, basis: float):
+        super().__init__(qty, basis)
         self._opt = opt
-        self._qty = qty
+
+    @property
+    def option(self) -> Option:
+        return self._opt
 
     def delta(self, vol=None, t=None, r=None, und_price=None):
         return self._qty * self._opt.delta(vol, t, r, und_price)
@@ -54,8 +76,8 @@ class OptionPosition(Position):
 
 class UnderlyingPosition(Position):
 
-    def __init__(self, qty, q: Quote):
-        self._qty = qty
+    def __init__(self, qty, q: Quote, basis: float):
+        super().__init__(qty, basis)
         self._quote = q
 
     def delta(self, vol=None, t=None, r=None, und_price=None):
@@ -103,9 +125,38 @@ class Portfolio:
             results.append(func(und_price=p))
         return results
 
+    def __iter__(self) -> Iterator[Position]:
+        return iter(self._positions)
+
     def __repr__(self) -> str:
         s = f'<{self.__class__.__name__}\n'
         for p in self._positions:
             s += f'  {p}\n'
         s += '>'
         return s
+
+    def pnl(self, minp, maxp):
+        """
+        pnl plot at expiry of all positions
+        """
+        price = np.linspace(minp, maxp, 500)
+        pnl = np.zeros(price.shape)
+
+        for pos in self:
+            if isinstance(pos, OptionPosition):
+                if isinstance(pos.option, CallOption):
+                    idx = price > pos.option.strike
+                    pnl[idx] += (price[idx] - pos.option.strike) * pos.option.multiplier * pos.qty
+                elif isinstance(pos.option, PutOption):
+                    idx = price < pos.option.strike
+                    pnl[idx] += (pos.option.strike - price[idx]) * pos.option.multiplier * pos.qty
+                else:
+                    raise TypeError(f"unknown position type {pos.option}")
+            else:
+                # underlying pos
+                print("underlying pos not implemented!")
+
+        plt.figure()
+        plt.plot(price, pnl)
+        plt.xlabel('Price')
+        plt.ylabel('PnL')

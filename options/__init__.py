@@ -17,6 +17,7 @@ class Option:
                  ask: float = np.nan,
                  und_price=None,
                  opt_price=None,
+                 multiplier=100,
                  metadata={}):
         """
         :param strike: Option strike
@@ -45,9 +46,12 @@ class Option:
             self._bid = opt_price
             self._ask = opt_price
 
+        self._multiplier = multiplier
         self._metadata = metadata
 
         self._model_price = np.nan
+
+        self._now = None  # Probably only used in testing
 
     def set_bid(self, val):
         self._bid = val
@@ -100,6 +104,7 @@ class Option:
     def extrinsic_val(self, price_func='mid', und_price_func='und_mid') -> float:
         return getattr(self, price_func)() - self.intrinsic_val(und_price_func=und_price_func)
 
+    @property
     def expiry(self) -> datetime.datetime:
         return self._expiry
 
@@ -108,12 +113,20 @@ class Option:
         Return time to expiry in years.
         """
         if isinstance(self._expiry, datetime.datetime):
-            return (self._expiry - pytz.utc.localize(datetime.datetime.utcnow())).total_seconds() / 3600 / 24 / 365.25
+            if self._now is not None:
+                return (self._expiry - self._now).total_seconds() / 3600 / 24 / 365.25
+            else:
+                return (self._expiry - pytz.utc.localize(datetime.datetime.utcnow())).total_seconds() / 3600 / 24 / 365.25
         else:
             return self._expiry
 
+    @property
     def strike(self):
         return self._strike
+
+    @property
+    def multiplier(self):
+        return self._multiplier
 
     def BScalc(self, vol, t, r, und_price):
         d1 = 1 / vol / np.sqrt(t) * (np.log(und_price /
@@ -180,7 +193,7 @@ class Option:
         return np.log(F / self._strike)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f} Und: {(self.und_ask() + self.und_bid())/2} Bid/ask: {self.bid()} {self.ask()}>"
+        return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f} Und: {(self.und_ask() + self.und_bid())/2:.2f} Bid/ask: {self.bid()} {self.ask()}>"
 
 
 class PutOption(Option):
@@ -231,8 +244,8 @@ class PutOption(Option):
         """
         Cash secured at strike price.
         """
-        PV = self.strike() - self.bid()
-        FV = self.strike() - self.model_price()
+        PV = self.strike - self.bid()
+        FV = self.strike - self.model_price()
         return np.log(FV / PV) / self.t_expiry()
 
 
