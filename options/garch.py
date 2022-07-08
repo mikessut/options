@@ -76,6 +76,7 @@ class GARCHMonteCarlo:
         self._p0 = p0
         self._strikes = np.array(strikes, ndmin=1)
         self._days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
+        self._price_paths = np.zeros((max(self._days_to_expiration), num_sims))
         self._put_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), num_sims))
         self._call_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), num_sims))
 
@@ -87,16 +88,51 @@ class GARCHMonteCarlo:
         self._num_sims = num_sims
 
     def run(self):
-        self._call_prices, self._put_prices = self.garch_monte_carlo(self._p0,
-                                                                     self._strikes,
-                                                                     self._days_to_expiration,
-                                                                     self._var0,
-                                                                     self._w,
-                                                                     self._alpha,
-                                                                     self._beta,
-                                                                     self._mu,
-                                                                     self._num_sims,
-                                                                    return_avgs=False)
+        self._create_price_paths()
+        self._update_opt_prices()
+        # self._call_prices, self._put_prices = self.garch_monte_carlo(self._p0,
+        #                                                              self._strikes,
+        #                                                              self._days_to_expiration,
+        #                                                              self._var0,
+        #                                                              self._w,
+        #                                                              self._alpha,
+        #                                                              self._beta,
+        #                                                              self._mu,
+        #                                                              self._num_sims,
+        #                                                             return_avgs=False)
+
+    def set_und_price(self, price):
+        self._p0 = price        
+        self._update_opt_prices()
+
+    def _create_price_paths(self):
+        for n in range(self._num_sims):
+            var = self._var0
+            p_prev = 1.0
+            for nd in range(max(self._days_to_expiration)):
+                p = p_prev * (1 + self._mu + np.sqrt(var) * np.random.randn())
+                sr = 1 - p / p_prev  # or should this be lr?
+                var = self._w + self._alpha * sr**2 + self._beta * var
+                p_prev = p
+                self._price_paths[nd, n] = p
+
+    def _update_opt_prices(self):
+        # self._strikes_pct = self._strikes / self._p0
+        for n_strike in range(len(self._strikes)):
+            for i, n_days in enumerate(self._days_to_expiration):
+                # index into self._price_paths is n_day - 1 (e.g. 1 days is 0th index)
+
+                # Calls
+                idx_itm = self._price_paths[n_days-1, :] * self._p0 > self._strikes[n_strike]
+                idx_otm = self._price_paths[n_days-1, :] * self._p0 <= self._strikes[n_strike]
+                self._call_prices[n_strike, i, idx_itm] = self._price_paths[n_days-1, idx_itm] * self._p0 - self._strikes[n_strike]
+                self._call_prices[n_strike, i, idx_otm] = 0
+
+                # Puts
+                idx_itm = self._price_paths[n_days-1, :] * self._p0 < self._strikes[n_strike]
+                idx_otm = self._price_paths[n_days-1, :] * self._p0 >= self._strikes[n_strike]
+                self._put_prices[n_strike, i, idx_itm] = self._strikes[n_strike] - self._price_paths[n_days-1, idx_itm] * self._p0
+                self._put_prices[n_strike, i, idx_otm] = 0
 
     def put(self, strike, days):
         idx_strike = np.where(self._strikes == strike)[0][0]
@@ -226,7 +262,7 @@ class GARCHMonteCarlo:
                     for m, strike in enumerate(strikes):
                         put_price = 0 if p > strike else strike - p
                         call_price = 0 if p < strike else p - strike
-                        put_prices[m,idx, n] = put_price
+                        put_prices[m, idx, n] = put_price
                         call_prices[m, idx, n] = call_price
         if return_avgs:
             return np.mean(call_prices, axis=2), np.mean(put_prices, axis=2)

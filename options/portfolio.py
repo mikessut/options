@@ -11,7 +11,7 @@ class Position:
     def __init__(self, qty: int, basis: float):
         """
         qty is negative for a short position
-        basis is always positive????
+        basis is always positive????  It represents the per unit
         """
         self._qty = qty
         self._basis = basis
@@ -35,6 +35,9 @@ class Position:
     @property
     def qty(self) -> int:
         return self._qty
+
+    def cost(self) -> float:
+        return self.qty * self.basis
 
 
 class OptionPosition(Position):
@@ -69,6 +72,9 @@ class OptionPosition(Position):
         else:
             # Use BS pricing
             return self._qty * self._opt.BSprice(vol, t, r, und_price)
+
+    def cost(self) -> float:
+        return self.qty * self.basis * self.option.multiplier
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} of {self._opt} x {self._qty}>"

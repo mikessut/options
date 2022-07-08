@@ -4,6 +4,7 @@ import pytest
 import pytz
 import datetime
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def test_garch():
@@ -111,4 +112,42 @@ def test_garch3():
     print(f"POP for put+call portfolio: {g.pop(prt):.2f}")
     prt.pnl(1000, 1200)
     plt.savefig("pnl.png")
+    return g
+
+
+def test_pct_garch():
+    strikes = [750, 1000, 1500, 2000]
+    ndays = [22, 50]
+
+    w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
+    var0 = 0.930**2 / 365
+    und_price = 1141.15
+    nsims = 160000
+    #nsims = 5000
+
+    call_prices1, put_prices1 = garch.GARCHMonteCarlo.garch_monte_carlo(und_price, strikes, ndays,
+                          var0, w, alpha, beta, mu=0, num_sims=nsims, return_avgs=True)
+
+    print(call_prices1.round(1))
+    print(put_prices1.round(1))
+    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta, num_sims=nsims)
+    g.run()
+
+    print()
+    call_prices2 = np.zeros((len(strikes), len(ndays)))
+    put_prices2 = np.zeros((len(strikes), len(ndays)))
+    for i, strike in enumerate(strikes):
+        for j, nday in enumerate(ndays):
+            call_prices2[i, j] = g.call(strike, nday)[0]
+            put_prices2[i, j] = g.put(strike, nday)[0]
+
+    print(call_prices2.round(1))
+    print(put_prices2.round(1))
+
+    print()
+    print((call_prices1 - call_prices2).round(1))
+    print((put_prices1 - put_prices2).round(1))
+
+    np.testing.assert_allclose(call_prices1, call_prices2, rtol=.05, atol=.5)
+    np.testing.assert_allclose(put_prices1, put_prices2, rtol=.05, atol=.5)
     return g
