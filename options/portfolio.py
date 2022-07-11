@@ -141,7 +141,7 @@ class Portfolio:
         s += '>'
         return s
 
-    def pnl(self, minp, maxp):
+    def pnl(self, minp, maxp, exclude_und=False):
         """
         pnl plot at expiry of all positions
         """
@@ -150,6 +150,7 @@ class Portfolio:
 
         for pos in self:
             if isinstance(pos, OptionPosition):
+                pnl -= pos.option.multiplier * pos.qty * pos.basis
                 if isinstance(pos.option, CallOption):
                     idx = price > pos.option.strike
                     pnl[idx] += (price[idx] - pos.option.strike) * pos.option.multiplier * pos.qty
@@ -160,7 +161,8 @@ class Portfolio:
                     raise TypeError(f"unknown position type {pos.option}")
             else:
                 # underlying pos
-                print("underlying pos not implemented!")
+                if not exclude_und:
+                    pnl += pos.qty * (price - pos.basis)
 
         plt.figure()
         plt.plot(price, pnl)
