@@ -87,9 +87,12 @@ class GARCHMonteCarlo:
         self._mu = mu
         self._num_sims = num_sims
 
+        self._has_run = False
+
     def run(self):
         self._create_price_paths()
         self._update_opt_prices()
+        self._has_run = True
         # self._call_prices, self._put_prices = self.garch_monte_carlo(self._p0,
         #                                                              self._strikes,
         #                                                              self._days_to_expiration,
@@ -134,13 +137,27 @@ class GARCHMonteCarlo:
                 self._put_prices[n_strike, i, idx_itm] = self._strikes[n_strike] - self._price_paths[n_days-1, idx_itm] * self._p0
                 self._put_prices[n_strike, i, idx_otm] = 0
 
+    def _add_new_days_to_expiration(self, days):
+        self._days_to_expiration = np.append(self._days_to_expiration, days)
+        self._put_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), self._num_sims))
+        self._call_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), self._num_sims))
+        self._update_opt_prices()
+
     def put(self, strike, days):
+        if not self._has_run:
+            raise ValueError("Trying to get price without running simulation.")
         idx_strike = np.where(self._strikes == strike)[0][0]
+        if days not in self._days_to_expiration and days < max(self._days_to_expiration):
+            self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
         return self._put_prices[idx_strike, idx_days, :].mean(), self._put_prices[idx_strike, idx_days, :].std()
 
     def call(self, strike, days):
+        if not self._has_run:
+            raise ValueError("Trying to get price without running simulation.")
         idx_strike = np.where(self._strikes == strike)[0][0]
+        if days not in self._days_to_expiration and days < max(self._days_to_expiration):
+            self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
         return self._call_prices[idx_strike, idx_days, :].mean(), self._call_prices[idx_strike, idx_days, :].std()
 

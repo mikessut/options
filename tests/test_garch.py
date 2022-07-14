@@ -151,3 +151,34 @@ def test_pct_garch():
     np.testing.assert_allclose(call_prices1, call_prices2, rtol=.05, atol=.5)
     np.testing.assert_allclose(put_prices1, put_prices2, rtol=.05, atol=.5)
     return g
+
+
+def test_garch_new_day():
+    und_price = 1000
+    strikes = 1000
+    ndays = [10, 20]
+
+    w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
+    var0 = 0.930**2 / 365
+    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta, num_sims=10000)
+    g.run()
+
+    calls = (g.call(strikes, 10), g.call(strikes, 20))
+    puts = (g.put(strikes, 10), g.put(strikes, 20))
+    print(calls)
+    print(puts)
+
+    # Making sure this doesn't fail
+    print(g.call(strikes, 9))
+    print(g.put(strikes, 9))
+
+    print(g.call(strikes, 19))
+    print(g.put(strikes, 19))
+
+    # Make sure the above values are the same
+    print(g.call(strikes, 10), g.call(strikes, 20))
+    print(g.put(strikes, 10), g.put(strikes, 20))
+    np.testing.assert_allclose(calls, (g.call(strikes, 10), g.call(strikes, 20)))
+    np.testing.assert_allclose(puts, (g.put(strikes, 10), g.put(strikes, 20)))
+
+    # assert False
