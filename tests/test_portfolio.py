@@ -1,4 +1,5 @@
 from options.portfolio import *
+from options import garch
 from options import *
 import pytest
 import matplotlib.pyplot as plt
@@ -6,7 +7,7 @@ import matplotlib.pyplot as plt
 
 @pytest.mark.parametrize('num_shares', [1, 100, -1, -100])
 def test_underlying(num_shares):
-    u = UnderlyingPosition(num_shares, Quote(100, 100))
+    u = UnderlyingPosition(num_shares, Quote(100, 100), basis=95)
     port = Portfolio([u])
 
     assert port.delta() == num_shares
@@ -39,8 +40,9 @@ def test_options():
 
     assert pytest.approx(c.delta(), abs=0.0001) == 0.5694
 
-    port = Portfolio([UnderlyingPosition(1000, q_und), OptionPosition(c, -1756)])
-    assert pytest.approx(port.delta(), abs=.2) == 0
+    port = Portfolio([UnderlyingPosition(1000, q_und, 100), OptionPosition(c, -17.56, 0)])
+    #assert pytest.approx(port.delta(), abs=.2) == 0
+    return port
 
 
 def plot_test_simple():
@@ -93,3 +95,20 @@ def plot_test():
     ax[1].plot(price, port.sweep(port.delta, price))
     ax[2].plot(price, port.sweep(port.gamma, price))
     plt.show()
+
+
+def test_garch_portfolio():
+    w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
+    var0 = 0.930**2 / 365
+
+    und_price = 1255
+    strikes = 1250
+    ndays = 14
+
+    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta, num_sims=10000)
+    g.run()
+
+    c = CallOption(strikes, 14/365.25)
+    port = Portfolio([OptionPosition(c, -1, 0)])
+
+    return g, c

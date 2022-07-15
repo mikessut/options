@@ -74,6 +74,10 @@ class Option:
     def set_und_ask(self, val):
         self._und_ask = val
 
+    def set_und_price(self, val):
+        self._und_bid = val
+        self._und_ask = val
+
     def und_mid(self) -> float:
         return (self._und_bid + self._und_ask) / 2
 
@@ -129,18 +133,20 @@ class Option:
         return self._multiplier
 
     def BScalc(self, vol, t, r, und_price):
+        if not all([np.isfinite(x) for x in [vol, t, r, und_price]]):
+            raise ValueError("All parameters must be finite")
         d1 = 1 / vol / np.sqrt(t) * (np.log(und_price /
                                             self._strike) + (r + vol**2 / 2) * t)
         d2 = d1 - vol * np.sqrt(t)
         return d1, d2
 
-    def IV(self, price=None, t=None, r=None):
+    def IV(self, price=None, t=None, r=None, und_price=None):
         if price is None:
             price = self.mid()
             if price < self.intrinsic_val():
                 price = np.mean([self.intrinsic_val(), self.ask()])
         try:
-            sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t) - price,
+            sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t, und_price=und_price) - price,
                             method='bisect',
                             bracket=(.0001, 3))
             return sol.root
@@ -216,12 +222,17 @@ class PutOption(Option):
         else:
             return 0.0
 
-    def delta(self, vol=None, t=None, r=None, und_price=None):
+    def delta(self, vol=None, t=None, r=None, und_price=None, opt_price=None):
         if t is None:
             t = self.t_expiry()
         if r is None:
             r = self._r
-        if vol is None:
+        if opt_price is not None:
+            # Calculate the IV for this price
+            if vol is not None:
+                raise ValueError("Both vol and opt_price cannot be specified")
+            vol = self.IV(opt_price, t, r, und_price)
+        elif vol is None:
             vol = self._vol
         if und_price is None:
             und_price = self.und_mid()
@@ -269,12 +280,17 @@ class CallOption(Option):
         else:
             return 0.0
 
-    def delta(self, vol=None, t=None, r=None, und_price=None):
+    def delta(self, vol=None, t=None, r=None, und_price=None, opt_price=None):
         if t is None:
             t = self.t_expiry()
         if r is None:
             r = self._r
-        if vol is None:
+        if opt_price is not None:
+            # Calculate the IV for this price
+            if vol is not None:
+                raise ValueError("Both vol and opt_price cannot be specified")
+            vol = self.IV(opt_price, t, r, und_price)
+        elif vol is None:
             vol = self._vol
         if und_price is None:
             und_price = self.und_mid()

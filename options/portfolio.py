@@ -1,5 +1,3 @@
-import abc
-from abc import abstractmethod, abstractproperty
 from options import Option, Quote, PutOption, CallOption
 from options import garch
 from typing import List, Iterator
@@ -17,17 +15,14 @@ class Position:
         self._qty = qty
         self._basis = basis
 
-    @abstractmethod
-    def delta(self, vol=None, t=None, r=None, und_price=None) -> float:
-        pass
+    def delta(self, opt_price=None, vol=None, t=None, r=None, und_price=None) -> float:
+        raise NotImplemented()
 
-    @abstractmethod
-    def gamma(self, vol=None, t=None, r=None, und_price=None) -> float:
-        pass
+    def gamma(self, opt_price=None, vol=None, t=None, r=None, und_price=None) -> float:
+        raise NotImplemented()
 
-    @abstractmethod
-    def value(self, vol=None, t=None, r=None, und_price=None) -> float:
-        pass
+    def value(self, opt_price=None, vol=None, t=None, r=None, und_price=None) -> float:
+        raise NotImplemented()
 
     @property
     def basis(self) -> float:
@@ -51,13 +46,13 @@ class OptionPosition(Position):
     def option(self) -> Option:
         return self._opt
 
-    def delta(self, vol=None, t=None, r=None, und_price=None):
-        return self._qty * self._opt.delta(vol, t, r, und_price)
+    def delta(self, opt_price=None, vol=None, t=None, r=None, und_price=None):
+        return self.qty * self.option.multiplier * self.option.delta(vol, t, r, und_price, opt_price)
 
-    def gamma(self, vol=None, t=None, r=None, und_price=None):
+    def gamma(self, opt_price=None, vol=None, t=None, r=None, und_price=None):
         return self._qty * self._opt.gamma(vol, t, r, und_price)
 
-    def value(self, vol=None, t=None, r=None, und_price=None):
+    def value(self, opt_price=None, vol=None, t=None, r=None, und_price=None):
         """
         If no arguments are passed, use bid/ask price to close position.
 
@@ -131,6 +126,9 @@ class Portfolio:
         for p in und_price:
             results.append(func(und_price=p))
         return results
+
+    def __getitem__(self, n):
+        return self._positions[n]
 
     def __iter__(self) -> Iterator[Position]:
         return iter(self._positions)

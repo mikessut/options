@@ -62,10 +62,10 @@ def fit_garch(historical_price, var0):
 def fit_garch2(historical_price):
     """
     """
-    # lr = np.log(historical_price[1:] / historical_price[:-1])
-    sr = 1 - historical_price[1:] / historical_price[:-1]
+    lr = np.log(historical_price[1:] / historical_price[:-1])
+    # sr = 1 - historical_price[1:] / historical_price[:-1]
     # Apparently this package want return in % so multiply by 100
-    garch = arch.arch_model(sr, vol='garch', p=1, o=0, q=1, rescale=True)
+    garch = arch.arch_model(lr, vol='garch', p=1, o=0, q=1, rescale=True)
     res = garch.fit()
     return res.params['omega'] / res.scale**2, res.params['alpha[1]'], res.params['beta[1]']
 
@@ -161,7 +161,7 @@ class GARCHMonteCarlo:
         idx_days = np.where(self._days_to_expiration == days)[0][0]
         return self._call_prices[idx_strike, idx_days, :].mean(), self._call_prices[idx_strike, idx_days, :].std()
 
-    def portfolio_expected_value(self, prt: portfolio.Portfolio):
+    def portfolio_expected_value(self, prt: 'portfolio.Portfolio'):
         prt_returns = np.zeros((self._num_sims,))
         for pos in prt:
             if isinstance(pos, portfolio.OptionPosition):
@@ -216,7 +216,7 @@ class GARCHMonteCarlo:
         elif isinstance(pos, portfolio.Portfolio):
             return self._portfolio_pop(pos)
 
-    def _portfolio_pop(self, prt: portfolio.Portfolio):
+    def _portfolio_pop(self, prt: 'portfolio.Portfolio'):
         prt_returns = np.zeros((self._num_sims,))
         for pos in prt:
             if isinstance(pos, portfolio.OptionPosition):

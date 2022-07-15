@@ -5,6 +5,7 @@ import pytz
 import datetime
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 
 def test_garch():
@@ -182,3 +183,31 @@ def test_garch_new_day():
     np.testing.assert_allclose(puts, (g.put(strikes, 10), g.put(strikes, 20)))
 
     # assert False
+
+
+def test_garch_btc():
+    und_price = 20829.7
+    var0 = 0.0029350105294403744
+    w = 0.00026337028025903464
+    alpha = 0.13684325341862802
+    beta = 0.7818352664119537
+
+    g = garch.GARCHMonteCarlo(und_price, 21000, 7, var0, w, alpha, beta, num_sims=10000)
+    g.run()
+
+    print(g.call(21000, 7))
+
+
+def test_fit_garch():
+    btc = pd.read_pickle('tests/BTC.pd')
+    eth = pd.read_pickle('tests/ETH.pd')
+
+    btc['lr'] = np.log(btc.Close / btc.Close.shift())
+    eth['lr'] = np.log(eth.Close / eth.Close.shift())
+
+    print(f"hiv btc: {btc.lr[1:].std() * np.sqrt(365.25)} eth: {eth.lr[1:].std() * np.sqrt(365.25)} ")
+
+    btc_fit = garch.fit_garch2(btc.Close.to_numpy())
+    eth_fit = garch.fit_garch2(eth.Close.to_numpy())
+    print(btc_fit, np.sqrt((btc_fit[0] / (1 - btc_fit[1] - btc_fit[2]) * 365.25)))
+    print(eth_fit, np.sqrt((eth_fit[0] / (1 - eth_fit[1] - eth_fit[2]) * 365.25)))
