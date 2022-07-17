@@ -13,11 +13,13 @@ def test_BS_value():
   p = options.PutOption(110, expiry=0.5, vol=.5, und_bid=100, und_ask=100)
   assert c.BSprice() == 10.531783818155567
   assert p.BSprice() == 19.709869848260794
+  c.price = c.BSprice()
+  p.price = p.BSprice()
 
   assert c.intrinsic_val() == 0.0
   assert p.intrinsic_val() == 10.0
-  assert c.extrinsic_val('BSprice') == 10.531783818155567
-  assert p.extrinsic_val('BSprice') == 9.709869848260794
+  assert c.extrinsic_val() == 10.531783818155567
+  assert p.extrinsic_val() == 9.709869848260794
 
 
 def test_IV():

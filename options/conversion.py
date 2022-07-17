@@ -12,7 +12,7 @@ class Conversion:
     def __init__(self, put: PutOption, call: CallOption):
         self._put = put
         self._call = call
-        if np.isfinite(put.und_mid()):
+        if np.isfinite(put.und_price):
             assert put.und_ask() == call.und_ask(), f"Put und_ask: {put.und_ask()}; call und_bid: {call.und_ask()}"
             assert put.und_bid() == call.und_bid(), f"Put und_bid: {put.und_bid()}; call und_bid: {call.und_bid()}"
 
@@ -21,8 +21,8 @@ class Conversion:
         Short extrinsic value minus long intrinsic value
         """
 
-        return self._call.extrinsic_val('bid', und_price_func='und_ask') - \
-               self._put.extrinsic_val('ask', und_price_func='und_ask')
+        return self._call.extrinsic_val() - \
+               self._put.extrinsic_val()
 
     def cost(self):
         """
@@ -51,8 +51,8 @@ class ReverseConversion:
         """
         Short extrinsic value minus long intrinsic value
         """
-        return self._put.extrinsic_val('bid', und_price_func='und_bid') - \
-               self._call.extrinsic_val('ask', und_price_func='und_bid')
+        return self._put.extrinsic_val() - \
+               self._call.extrinsic_val()
 
     def cost(self):
         """

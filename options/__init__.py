@@ -53,39 +53,67 @@ class Option:
 
         self._now = None  # Probably only used in testing
 
-    def set_bid(self, val):
-        self._bid = val
-
-    def set_ask(self, val):
-        self._ask = val
-
-    def bid(self) -> float:
+    @property
+    def bid(self):
         return self._bid
 
-    def ask(self) -> float:
+    @bid.setter
+    def bid(self, val):
+        self._bid = val
+
+    @property
+    def ask(self):
         return self._ask
 
-    def mid(self) -> float:
-        return (self.bid() + self.ask()) / 2
+    @ask.setter
+    def ask(self, val):
+        self._ask = val
 
-    def set_und_bid(self, val):
-        self._und_bid = val
+    @property
+    def price(self):
+        return (self.bid + self.ask) / 2
 
-    def set_und_ask(self, val):
-        self._und_ask = val
+    @price.setter
+    def price(self, val):
+        self._bid = val
+        self._ask = val
 
-    def set_und_price(self, val):
-        self._und_bid = val
-        self._und_ask = val
+    @property
+    def vol(self):
+        return self._vol
 
-    def und_mid(self) -> float:
-        return (self._und_bid + self._und_ask) / 2
+    @vol.setter
+    def vol(self, val):
+        self._vol = val
 
-    def und_bid(self) -> float:
+    # use price instead
+    # def mid(self) -> float:
+    #     return (self.bid() + self.ask()) / 2
+
+    @property
+    def und_bid(self):
         return self._und_bid
 
-    def und_ask(self) -> float:
+    @und_bid.setter
+    def und_bid(self, val):
+        self._und_bid = val
+
+    @property
+    def und_ask(self):
         return self._und_ask
+
+    @und_ask.setter
+    def und_ask(self, val):
+        self._und_ask = val
+
+    @property
+    def und_price(self):
+        return (self.und_bid + self.und_ask) / 2
+
+    @und_price.setter
+    def und_price(self, val):
+        self.und_bid = val
+        self.und_ask = val
 
     def set_model_price(self, val):
         self._model_price = val
@@ -105,8 +133,8 @@ class Option:
     # def set_und_price(self, val):
     #     self._und_price = val
 
-    def extrinsic_val(self, price_func='mid', und_price_func='und_mid') -> float:
-        return getattr(self, price_func)() - self.intrinsic_val(und_price_func=und_price_func)
+    def extrinsic_val(self) -> float:
+        return self.price - self.intrinsic_val()
 
     @property
     def expiry(self) -> datetime.datetime:
@@ -142,9 +170,11 @@ class Option:
 
     def IV(self, price=None, t=None, r=None, und_price=None):
         if price is None:
-            price = self.mid()
-            if price < self.intrinsic_val():
-                price = np.mean([self.intrinsic_val(), self.ask()])
+            price = self.price
+            if price < self.intrinsic_val() * np.exp(self._r * self.t_expiry()):
+                # price = np.mean([self.intrinsic_val(), self.ask])
+                # price = self.intrinsic_val()
+                raise ValueError("price is less than discounted intrinsic value")
         try:
             sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t, und_price=und_price) - price,
                             method='bisect',
@@ -165,7 +195,7 @@ class Option:
         if vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return norm.pdf(d1) / und_price / vol / np.sqrt(t)
 
@@ -180,9 +210,9 @@ class Option:
         if vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
-        return self.und_mid() * norm.pdf(d1) * np.sqrt(t)
+        return self.und_price * norm.pdf(d1) * np.sqrt(t)
 
     def std_moneyness(self):
         """
@@ -192,14 +222,14 @@ class Option:
             vol = self.IV()
         else:
             vol = self._vol
-        return (np.log(self.und_mid() / self._strike) + self._r * self.t_expiry()) / vol / np.sqrt(self.t_expiry())
+        return (np.log(self.und_price / self._strike) + self._r * self.t_expiry()) / vol / np.sqrt(self.t_expiry())
 
     def moneyness(self):
-        F = self.und_mid() * np.exp(self._r * self.t_expiry())
+        F = self.und_price * np.exp(self._r * self.t_expiry())
         return np.log(F / self._strike)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self._strike} {self.t_expiry():.3f} Und: {(self.und_ask() + self.und_bid())/2:.2f} Bid/ask: {self.bid()} {self.ask()}>"
+        return f"<{self.__class__.__name__} {self.strike} {self.t_expiry():.3f} Und: {self.und_price:.2f} Bid/ask: {self.bid} {self.ask}>"
 
 
 class PutOption(Option):
@@ -212,13 +242,13 @@ class PutOption(Option):
         if vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return norm.cdf(-d2) * self._strike * np.exp(-r * t) - norm.cdf(-d1) * und_price
 
-    def intrinsic_val(self, und_price_func='und_mid') -> float:
-        if self._strike > getattr(self, und_price_func)():
-            return self._strike - getattr(self, und_price_func)()
+    def intrinsic_val(self) -> float:
+        if self.strike > self.und_price:
+            return self.strike - self.und_price
         else:
             return 0.0
 
@@ -235,7 +265,7 @@ class PutOption(Option):
         elif vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return -norm.cdf(-d1)
 
@@ -247,7 +277,7 @@ class PutOption(Option):
         if vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return -und_price * norm.pdf(d1) * vol / 2 / np.sqrt(t) + r * self._strike * np.exp(-r * t) * norm.cdf(-d2)
 
@@ -255,7 +285,7 @@ class PutOption(Option):
         """
         Cash secured at strike price.
         """
-        PV = self.strike - self.bid()
+        PV = self.strike - self.bid
         FV = self.strike - self.model_price()
         return np.log(FV / PV) / self.t_expiry()
 
@@ -270,13 +300,13 @@ class CallOption(Option):
         if vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return norm.cdf(d1) * und_price - norm.cdf(d2) * self._strike * np.exp(-r * t)
 
-    def intrinsic_val(self, und_price_func='und_mid') -> float:
-        if self._strike < getattr(self, und_price_func)():
-            return getattr(self, und_price_func)() - self._strike
+    def intrinsic_val(self) -> float:
+        if self.strike < self.und_price:
+            return self.und_price - self.strike
         else:
             return 0.0
 
@@ -293,7 +323,7 @@ class CallOption(Option):
         elif vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return norm.cdf(d1)
 
@@ -305,7 +335,7 @@ class CallOption(Option):
         if vol is None:
             vol = self._vol
         if und_price is None:
-            und_price = self.und_mid()
+            und_price = self.und_price
         d1, d2 = self.BScalc(vol, t, r, und_price)
         return -und_price * norm.pdf(d1) * vol / 2 / np.sqrt(t) - r * self._strike * np.exp(-r * t) * norm.cdf(d2)
 
@@ -313,8 +343,8 @@ class CallOption(Option):
         """
         "Covered call" - secured by holding underlying at current undlying price.
         """
-        PV = self.und_mid() - self.bid()
-        FV = self.und_mid() - self.model_price()
+        PV = self.und_price - self.bid
+        FV = self.und_price - self.model_price()
         return np.log(FV / PV) / self.t_expiry()
 
 

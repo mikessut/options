@@ -3,6 +3,9 @@ import numpy as np
 from scipy.optimize import minimize
 from options import portfolio
 import options
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def calc_garch(w, alpha, beta, lr, var0=None):
@@ -72,7 +75,7 @@ def fit_garch2(historical_price):
 
 class GARCHMonteCarlo:
 
-    def __init__(self, p0, strikes, days_to_expiration, var0, w, alpha, beta, mu=0, num_sims=5000):
+    def __init__(self, p0, strikes, days_to_expiration, var0, w, alpha, beta, r=0.015, mu=0, num_sims=5000):
         self._p0 = p0
         self._strikes = np.array(strikes, ndmin=1)
         self._days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
@@ -85,14 +88,19 @@ class GARCHMonteCarlo:
         self._alpha = alpha
         self._beta = beta
         self._mu = mu
+        self._r = r
         self._num_sims = num_sims
+
+        self._min_vol_ratio = .5  # Guard to not allow vol below sqrt(var0)
 
         self._has_run = False
 
     def run(self):
+        log.info(f"GARCHMonteCarlo Run Started.")
         self._create_price_paths()
         self._update_opt_prices()
         self._has_run = True
+        log.info(f"GARCHMonteCarlo Run complete.")
         # self._call_prices, self._put_prices = self.garch_monte_carlo(self._p0,
         #                                                              self._strikes,
         #                                                              self._days_to_expiration,
@@ -150,7 +158,9 @@ class GARCHMonteCarlo:
         if days not in self._days_to_expiration and days < max(self._days_to_expiration):
             self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
-        return self._put_prices[idx_strike, idx_days, :].mean(), self._put_prices[idx_strike, idx_days, :].std()
+        vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
+        put = options.PutOption(strike, days*365.25, vol_annual, und_price=self._p0, r=self._r)
+        return max(self._put_prices[idx_strike, idx_days, :].mean(), put.BSprice())
 
     def call(self, strike, days):
         if not self._has_run:
@@ -159,7 +169,9 @@ class GARCHMonteCarlo:
         if days not in self._days_to_expiration and days < max(self._days_to_expiration):
             self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
-        return self._call_prices[idx_strike, idx_days, :].mean(), self._call_prices[idx_strike, idx_days, :].std()
+        vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
+        call = options.CallOption(strike, days*365.25, vol_annual, und_price=self._p0, r=self._r)
+        return max(self._call_prices[idx_strike, idx_days, :].mean(), call.BSprice())
 
     def portfolio_expected_value(self, prt: 'portfolio.Portfolio'):
         prt_returns = np.zeros((self._num_sims,))

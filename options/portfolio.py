@@ -46,11 +46,14 @@ class OptionPosition(Position):
     def option(self) -> Option:
         return self._opt
 
-    def delta(self, opt_price=None, vol=None, t=None, r=None, und_price=None):
-        return self.qty * self.option.multiplier * self.option.delta(vol, t, r, und_price, opt_price)
+    def delta(self):
+        return self.qty * self.option.multiplier * self.option.delta()
 
-    def gamma(self, opt_price=None, vol=None, t=None, r=None, und_price=None):
-        return self._qty * self._opt.gamma(vol, t, r, und_price)
+    def theta(self):
+        return self.qty * self.option.multiplier * self.option.theta()
+
+    def gamma(self):
+        return self.qty * self.option.multiplier * self.option.gamma()
 
     def value(self, opt_price=None, vol=None, t=None, r=None, und_price=None):
         """
@@ -82,10 +85,13 @@ class UnderlyingPosition(Position):
         super().__init__(qty, basis)
         self._quote = q
 
-    def delta(self, vol=None, t=None, r=None, und_price=None):
+    def delta(self):
         return self._qty
 
-    def gamma(self, vol=None, t=None, r=None, und_price=None):
+    def gamma(self):
+        return 0.0
+
+    def theta(self):
         return 0.0
 
     def value(self, vol=None, t=None, r=None, und_price=None):
@@ -112,14 +118,22 @@ class Portfolio:
     def add_pos(self, pos: Position):
         self._positions.append(pos)
 
-    def delta(self, und_price=None):
-        return sum([x.delta(und_price=und_price) for x in self._positions])
+    def delta(self):
+        return sum([x.delta() for x in self])
 
-    def gamma(self, und_price=None):
-        return sum([x.gamma(und_price=und_price) for x in self._positions])
+    def gamma(self):
+        return sum([x.gamma() for x in self])
 
-    def value(self, und_price=None):
-        return sum([x.value(und_price=und_price) for x in self._positions])
+    def theta(self):
+        """
+        This is annualized.
+        
+        Negative number is an expense (e.g. long option)
+        """
+        return sum([x.theta() for x in self])
+
+    def value(self):
+        return sum([x.value() for x in self])
 
     def sweep(self, func, und_price):
         results = []
