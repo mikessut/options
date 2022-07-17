@@ -178,14 +178,14 @@ class Portfolio:
                     if garch_calc:
                         for n in range(len(price)):
                             g.set_und_price(price[n])
-                            pnl_today[n] += (g.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25)))[0] - pos.basis) * pos.option.multiplier * pos.qty
+                            pnl_today[n] += (g.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
                 elif isinstance(pos.option, PutOption):
                     idx = price < pos.option.strike
                     pnl[idx] += (pos.option.strike - price[idx]) * pos.option.multiplier * pos.qty
                     if garch_calc:
                         for n in range(len(price)):
                             g.set_und_price(price[n])
-                            pnl_today[n] += (g.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25)))[0] - pos.basis) * pos.option.multiplier * pos.qty
+                            pnl_today[n] += (g.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
                 else:
                     raise TypeError(f"unknown position type {pos.option}")
             else:

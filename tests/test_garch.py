@@ -123,8 +123,7 @@ def test_pct_garch():
     w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
     var0 = 0.930**2 / 365
     und_price = 1141.15
-    nsims = 160000
-    #nsims = 5000
+    nsims = 16000
 
     call_prices1, put_prices1 = garch.GARCHMonteCarlo.garch_monte_carlo(und_price, strikes, ndays,
                           var0, w, alpha, beta, mu=0, num_sims=nsims, return_avgs=True)
@@ -139,9 +138,10 @@ def test_pct_garch():
     put_prices2 = np.zeros((len(strikes), len(ndays)))
     for i, strike in enumerate(strikes):
         for j, nday in enumerate(ndays):
-            call_prices2[i, j] = g.call(strike, nday)[0]
-            put_prices2[i, j] = g.put(strike, nday)[0]
+            call_prices2[i, j] = g.call(strike, nday)
+            put_prices2[i, j] = g.put(strike, nday)
 
+    print("method 2")
     print(call_prices2.round(1))
     print(put_prices2.round(1))
 
