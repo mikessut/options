@@ -106,6 +106,10 @@ class GARCHMonteCarlo:
         self._p0 = price        
         self._update_opt_prices()
 
+    @property
+    def und_price(self):
+        return self._p0
+
     def _create_price_paths(self):
         for n in range(self._num_sims):
             var = self._var0
@@ -151,8 +155,11 @@ class GARCHMonteCarlo:
         model_price = self._put_prices[idx_strike, idx_days, :].mean()
         vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
         put = options.PutOption(strike, days / 365.25, vol_annual, und_price=self._p0, r=self._r)
-        log.debug(f"{self.__class__.__name__} put priced at: {model_price} vol: {vol_annual} BSprice: {put.BSprice()} t: {days/365.25}")
-        return max(model_price, put.BSprice())
+        bs_price = put.BSprice()
+        if bs_price > model_price:
+            log.warning(f"garch.put() BS price is larger than model price. put priced at: {model_price} vol: {vol_annual} BSprice: {bs_price} t: {days/365.25}")
+            return bs_price
+        return model_price
 
     def call(self, strike, days):
         if not self._has_run:
@@ -165,8 +172,11 @@ class GARCHMonteCarlo:
         model_price = self._call_prices[idx_strike, idx_days, :].mean()
         
         call = options.CallOption(strike, days / 365.25, vol_annual, und_price=self._p0, r=self._r)
-        log.debug(f"{self.__class__.__name__} call priced at: {model_price} vol: {vol_annual} BSprice: {call.BSprice()} t: {days/365.25}")
-        return max(model_price, call.BSprice())
+        bs_price = call.BSprice()
+        if bs_price > model_price:
+            log.warning(f"garch.call() BS price is larger than model price. call priced at: {model_price} vol: {vol_annual} BSprice: {bs_price} t: {days/365.25}")
+            return bs_price
+        return model_price
 
     def portfolio_expected_value(self, prt: 'portfolio.Portfolio'):
         prt_returns = np.zeros((self._num_sims,))

@@ -171,10 +171,11 @@ class Option:
     def IV(self, price=None, t=None, r=None, und_price=None):
         if price is None:
             price = self.price
-            if price < self.intrinsic_val() * np.exp(self._r * self.t_expiry()):
+            # if price < self.intrinsic_val() * np.exp(self._r * self.t_expiry()):
+            if price < self.BSprice(vol=1e-6, r=r, t=t, und_price=und_price):
                 # price = np.mean([self.intrinsic_val(), self.ask])
                 # price = self.intrinsic_val()
-                raise ValueError("price is less than discounted intrinsic value")
+                raise ValueError("price is less than vol=0 price")
         try:
             sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t, und_price=und_price) - price,
                             method='bisect',
@@ -229,7 +230,7 @@ class Option:
         return np.log(F / self._strike)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.strike} {self.t_expiry():.3f} Und: {self.und_price:.2f} Bid/ask: {self.bid} {self.ask}>"
+        return f"<{self.__class__.__name__} {self.strike} {self.t_expiry():.3f} Und: {self.und_price:.2f} Bid/ask: {self.bid:.3f} {self.ask:.3f}>"
 
 
 class PutOption(Option):
