@@ -42,3 +42,13 @@ def test_greeks():
 
   assert pytest.approx(c.theta(), abs=.0001) == -28.04578 # must be per year
   assert pytest.approx(p.theta(), abs=.0001) == -26.39825
+
+
+def test_deep_itm_call():
+  und_price = 1563.555
+  expiry = 0.027727499601870865
+  opt_price = 1065.869848958933
+  c = options.CallOption(750, expiry=expiry, und_price=und_price, opt_price=opt_price)
+
+  print(c.IV())
+  return c

@@ -4,6 +4,7 @@ from scipy.optimize import minimize
 from options import portfolio
 import options
 import logging
+import datetime
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class GARCHMonteCarlo:
         self._w = w
         self._alpha = alpha
         self._beta = beta
+        self._long_term_annual_vol = np.sqrt((self._w / (1 - self._alpha - self._beta)) * 365.25)
         self._mu = mu
         self._r = r
         self._num_sims = num_sims
@@ -145,7 +147,7 @@ class GARCHMonteCarlo:
         self._call_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), self._num_sims))
         self._update_opt_prices()
 
-    def put(self, strike, days):
+    def put(self, strike, days: int, expiry: datetime.datetime=None):
         if not self._has_run:
             raise ValueError("Trying to get price without running simulation.")
         idx_strike = np.where(self._strikes == strike)[0][0]
@@ -153,28 +155,33 @@ class GARCHMonteCarlo:
             self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
         model_price = self._put_prices[idx_strike, idx_days, :].mean()
-        vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
-        put = options.PutOption(strike, days / 365.25, vol_annual, und_price=self._p0, r=self._r)
+        # vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
+        if expiry is None:
+            expiry = days / 365.25
+            log.debug(f"expiry not passed to function setting to {expiry}")
+        put = options.PutOption(strike, expiry, self._long_term_annual_vol * self._min_vol_ratio, und_price=self._p0, r=self._r)
         bs_price = put.BSprice()
         if bs_price > model_price:
-            log.warning(f"garch.put() BS price is larger than model price. put priced at: {model_price} vol: {vol_annual} BSprice: {bs_price} t: {days/365.25}")
+            log.warning(f"garch.put() BS price is larger than model price. put priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
             return bs_price
         return model_price
 
-    def call(self, strike, days):
+    def call(self, strike, days: int, expiry: datetime.datetime):
         if not self._has_run:
             raise ValueError("Trying to get price without running simulation.")
         idx_strike = np.where(self._strikes == strike)[0][0]
         if days not in self._days_to_expiration and days < max(self._days_to_expiration):
             self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
-        vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
+        # vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
         model_price = self._call_prices[idx_strike, idx_days, :].mean()
-        
-        call = options.CallOption(strike, days / 365.25, vol_annual, und_price=self._p0, r=self._r)
+        if expiry is None:
+            expiry = days / 365.25
+            log.debug(f"expiry not passed to function setting to {expiry}")
+        call = options.CallOption(strike, expiry, self._long_term_annual_vol * self._min_vol_ratio, und_price=self._p0, r=self._r)
         bs_price = call.BSprice()
         if bs_price > model_price:
-            log.warning(f"garch.call() BS price is larger than model price. call priced at: {model_price} vol: {vol_annual} BSprice: {bs_price} t: {days/365.25}")
+            log.warning(f"garch.call() BS price is larger than model price. call priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
             return bs_price
         return model_price
 

@@ -3,6 +3,9 @@ import pytz
 import numpy as np
 from scipy.stats import norm
 from scipy.optimize import root_scalar
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class Option:
@@ -162,7 +165,7 @@ class Option:
 
     def BScalc(self, vol, t, r, und_price):
         if not all([np.isfinite(x) for x in [vol, t, r, und_price]]):
-            raise ValueError("All parameters must be finite")
+            raise ValueError(f"All parameters must be finite {[vol, t, r, und_price]}")
         d1 = 1 / vol / np.sqrt(t) * (np.log(und_price /
                                             self._strike) + (r + vol**2 / 2) * t)
         d2 = d1 - vol * np.sqrt(t)
@@ -179,10 +182,11 @@ class Option:
         try:
             sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t, und_price=und_price) - price,
                             method='bisect',
-                            bracket=(.0001, 3))
+                            bracket=(1e-6, 10))
             return sol.root
         except ValueError as e:
-            print("Warning:", e)
+            log.exception(f"Warning: {e}")
+            log.error(f"IV method failed: price={price}, t={t}, r={r}, und_price={und_price}, self: {self}")
             return np.nan
 
     def gamma(self, vol=None, t=None, r=None, und_price=None):

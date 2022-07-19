@@ -3,6 +3,7 @@ from options import garch
 from typing import List, Iterator
 import matplotlib.pyplot as plt
 import numpy as np
+import datetime
 
 
 class Position:
@@ -154,19 +155,14 @@ class Portfolio:
         s += '>'
         return s
 
-    def pnl(self, minp, maxp, exclude_und=False, garch_calc=False,
-            var0=None, w=None, alpha=None, beta=None, mu=None):
+    def pnl(self, minp, maxp, exclude_und=False, garch_instance=None):
         """
         pnl plot at expiry of all positions
         """
         price = np.linspace(minp, maxp, 100)
         pnl = np.zeros(price.shape)
 
-        if garch_calc:
-            strikes = list(set([x.option.strike for x in self if isinstance(x, OptionPosition)]))
-            days = list(set([round(x.option.t_expiry() * 365.25) for x in self if isinstance(x, OptionPosition)]))
-            g = garch.GARCHMonteCarlo(price[0], strikes, days, var0, w, alpha, beta, mu)
-            g.run()
+        if garch_instance is not None:
             pnl_today = np.zeros(price.shape)
 
         for pos in self:
@@ -175,17 +171,17 @@ class Portfolio:
                 if isinstance(pos.option, CallOption):
                     idx = price > pos.option.strike
                     pnl[idx] += (price[idx] - pos.option.strike) * pos.option.multiplier * pos.qty
-                    if garch_calc:
+                    if garch_instance is not None:
                         for n in range(len(price)):
-                            g.set_und_price(price[n])
-                            pnl_today[n] += (g.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
+                            garch_instance.set_und_price(price[n])
+                            pnl_today[n] += (garch_instance.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
                 elif isinstance(pos.option, PutOption):
                     idx = price < pos.option.strike
                     pnl[idx] += (pos.option.strike - price[idx]) * pos.option.multiplier * pos.qty
-                    if garch_calc:
+                    if garch_instance is not None:
                         for n in range(len(price)):
-                            g.set_und_price(price[n])
-                            pnl_today[n] += (g.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
+                            garch_instance.set_und_price(price[n])
+                            pnl_today[n] += (garch_instance.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
                 else:
                     raise TypeError(f"unknown position type {pos.option}")
             else:
@@ -195,7 +191,50 @@ class Portfolio:
 
         plt.figure()
         plt.plot(price, pnl)
-        if garch_calc:
+        if garch_instance is not None:
             plt.plot(price, pnl_today)
         plt.xlabel('Price')
         plt.ylabel('PnL')
+        plt.title(datetime.datetime.utcnow().isoformat())
+
+    def delta_plot(self, minp, maxp, exclude_und=False, garch_instance=None):
+        """
+        pnl plot at expiry of all positions
+        """
+        price = np.linspace(minp, maxp, 100)
+        delta = np.zeros(price.shape)
+
+        if garch_instance is not None:
+            pnl_today = np.zeros(price.shape)
+
+        for pos in self:
+            if isinstance(pos, OptionPosition):
+                pnl -= pos.option.multiplier * pos.qty * pos.basis
+                if isinstance(pos.option, CallOption):
+                    idx = price > pos.option.strike
+                    pnl[idx] += (price[idx] - pos.option.strike) * pos.option.multiplier * pos.qty
+                    if garch_instance is not None:
+                        for n in range(len(price)):
+                            garch.set_und_price(price[n])
+                            pnl_today[n] += (garch_instance.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
+                elif isinstance(pos.option, PutOption):
+                    idx = price < pos.option.strike
+                    pnl[idx] += (pos.option.strike - price[idx]) * pos.option.multiplier * pos.qty
+                    if garch_instance is not None:
+                        for n in range(len(price)):
+                            garch.set_und_price(price[n])
+                            pnl_today[n] += (garch_instance.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
+                else:
+                    raise TypeError(f"unknown position type {pos.option}")
+            else:
+                # underlying pos
+                if not exclude_und:
+                    pnl += pos.qty * (price - pos.basis)
+
+        plt.figure()
+        plt.plot(price, pnl)
+        if garch:
+            plt.plot(price, pnl_today)
+        plt.xlabel('Price')
+        plt.ylabel('delta')
+        plt.title(datetime.datetime.utcnow().isoformat())
