@@ -4,6 +4,7 @@ from typing import List, Iterator
 import matplotlib.pyplot as plt
 import numpy as np
 import datetime
+import pandas as pd
 
 
 class Position:
@@ -155,6 +156,37 @@ class Portfolio:
         s += '>'
         return s
 
+    def table(self) -> str:
+        cols = "pos,qty,expiry,model_price,delta,theta"
+        result = cols + '\n'
+        for p in self:
+            if isinstance(p, OptionPosition):
+                result += f"{p},{p.qty},{p.option.expiry.strftime('%Y%m%d')},{p.option.price},{p.delta()},{p.theta()}\n"
+            else:
+                result += f"{p},{p.qty},,,{p.delta()},{p.theta()}\n"
+        return result
+
+    def dataframe(self) -> pd.DataFrame:
+        df = pd.DataFrame(columns=['pos', 'qty', 'expiry', 'strike', 'model_price', 'model_vol', 'bid', 'ask', 'basis', 'delta', 'prt_delta', 'theta'])
+        
+        ctr = 0
+        for p in self:
+            df.loc[ctr, 'pos'] = p
+            df.loc[ctr, 'qty'] = p.qty
+            df.loc[ctr, 'prt_delta'] = p.delta()
+            df.loc[ctr, 'theta'] = p.theta() / 365.25
+            df.loc[ctr, 'basis'] = p.basis
+            if isinstance(p, OptionPosition):
+                df.loc[ctr, 'expiry'] = p.option.expiry.strftime('%Y%m%d')
+                df.loc[ctr, 'strike'] = p.option.strike
+                df.loc[ctr, 'model_price'] = p.option.model_price
+                df.loc[ctr, 'model_vol'] = p.option.vol
+                df.loc[ctr, 'bid'] = p.option.bid
+                df.loc[ctr, 'ask'] = p.option.ask
+                df.loc[ctr, 'delta'] = p.option.delta()
+            ctr += 1
+        return df
+
     def pnl(self, minp, maxp, exclude_und=False, garch_instance=None):
         """
         pnl plot at expiry of all positions
@@ -174,14 +206,14 @@ class Portfolio:
                     if garch_instance is not None:
                         for n in range(len(price)):
                             garch_instance.set_und_price(price[n])
-                            pnl_today[n] += (garch_instance.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
+                            pnl_today[n] += (garch_instance.call(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25)), pos.option.expiry) - pos.basis) * pos.option.multiplier * pos.qty
                 elif isinstance(pos.option, PutOption):
                     idx = price < pos.option.strike
                     pnl[idx] += (pos.option.strike - price[idx]) * pos.option.multiplier * pos.qty
                     if garch_instance is not None:
                         for n in range(len(price)):
                             garch_instance.set_und_price(price[n])
-                            pnl_today[n] += (garch_instance.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25))) - pos.basis) * pos.option.multiplier * pos.qty
+                            pnl_today[n] += (garch_instance.put(pos.option.strike, int(np.round(pos.option.t_expiry() * 365.25)), pos.option.expiry) - pos.basis) * pos.option.multiplier * pos.qty
                 else:
                     raise TypeError(f"unknown position type {pos.option}")
             else:

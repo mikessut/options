@@ -162,11 +162,11 @@ class GARCHMonteCarlo:
         put = options.PutOption(strike, expiry, self._long_term_annual_vol * self._min_vol_ratio, und_price=self._p0, r=self._r)
         bs_price = put.BSprice()
         if bs_price > model_price:
-            log.warning(f"garch.put() BS price is larger than model price. put priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
+            log.debug(f"garch.put() BS price is larger than model price. put priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
             return bs_price
         return model_price
 
-    def call(self, strike, days: int, expiry: datetime.datetime):
+    def call(self, strike, days: int, expiry: datetime.datetime=None):
         if not self._has_run:
             raise ValueError("Trying to get price without running simulation.")
         idx_strike = np.where(self._strikes == strike)[0][0]
@@ -181,7 +181,7 @@ class GARCHMonteCarlo:
         call = options.CallOption(strike, expiry, self._long_term_annual_vol * self._min_vol_ratio, und_price=self._p0, r=self._r)
         bs_price = call.BSprice()
         if bs_price > model_price:
-            log.warning(f"garch.call() BS price is larger than model price. call priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
+            log.debug(f"garch.call() BS price is larger than model price. call priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
             return bs_price
         return model_price
 

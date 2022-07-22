@@ -118,11 +118,13 @@ class Option:
         self.und_bid = val
         self.und_ask = val
 
-    def set_model_price(self, val):
-        self._model_price = val
-
-    def model_price(self) -> float:
+    @property
+    def model_price(self):
         return self._model_price
+
+    @model_price.setter
+    def model_price(self, val):
+        self._model_price = val
 
     def short_excess_value(self):
         return self.bid() - self.model_price()
@@ -131,7 +133,7 @@ class Option:
         return self.model_price() - self.ask()
 
     def long_roi(self):
-        return np.log(self.model_price() / self.ask()) / self.t_expiry()
+        return np.log(self.model_price / self.ask) / self.t_expiry()
 
     # def set_und_price(self, val):
     #     self._und_price = val
@@ -234,7 +236,21 @@ class Option:
         return np.log(F / self._strike)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.strike} {self.t_expiry():.3f} Und: {self.und_price:.2f} Bid/ask: {self.bid:.3f} {self.ask:.3f}>"
+        if isinstance(self._expiry, datetime.datetime):
+            expiry = self._expiry.strftime('%Y%m%d')
+        else:
+            expiry = f"{self._expiry:.3f}"
+        return f"<{self.__class__.__name__} {self.strike} {expiry} Und: {self.und_price:.2f} Bid/ask: {self.bid:.3f} {self.ask:.3f}>"
+
+    def __eq__(self, other):
+        """
+        True if same class (put/option), strike, and expiry.
+        Doesn't compare any pricing
+        """
+        if isinstance(other, self.__class__) and other.strike == self.strike and other.expiry == self.expiry:
+            return True
+        else:
+            return False
 
 
 class PutOption(Option):
