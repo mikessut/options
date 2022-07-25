@@ -167,7 +167,9 @@ class Option:
 
     def BScalc(self, vol, t, r, und_price):
         if not all([np.isfinite(x) for x in [vol, t, r, und_price]]):
-            raise ValueError(f"All parameters must be finite {[vol, t, r, und_price]}")
+            #raise ValueError(f"All parameters must be finite {[vol, t, r, und_price]}")
+            log.error(f"All parameters must be finite vol, t, r, und_price {[vol, t, r, und_price]}")
+            return np.nan, np.nan
         d1 = 1 / vol / np.sqrt(t) * (np.log(und_price /
                                             self._strike) + (r + vol**2 / 2) * t)
         d2 = d1 - vol * np.sqrt(t)
