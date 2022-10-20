@@ -138,8 +138,15 @@ class Option:
     # def set_und_price(self, val):
     #     self._und_price = val
 
-    def extrinsic_val(self) -> float:
-        return self.price - self.intrinsic_val()
+    def extrinsic_val(self, method='mid') -> float:
+        if method == 'mid':
+            return self.price - self.intrinsic_val()
+        elif method == 'bid':
+            return self.bid - self.intrinsic_val()
+        elif method == 'ask':
+            return self.ask - self.intrinsic_val()
+        else:
+            raise ValueError("Unknown method for extrinsic_val()")
 
     @property
     def expiry(self) -> datetime.datetime:
