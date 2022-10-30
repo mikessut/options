@@ -76,7 +76,23 @@ def fit_garch2(historical_price):
 
 class GARCHMonteCarlo:
 
-    def __init__(self, p0, strikes, days_to_expiration, var0, w, alpha, beta, r=0.015, mu=0, num_sims=5000):
+    def __init__(self, p0, strikes, days_to_expiration, var0, w, alpha, beta, 
+                 r=0.015, mu=0, num_sims=5000,
+                 days_in_year=365.25):
+        """
+        :param p0: Initial underlying price
+        :param strikes: List of strike prices
+        :param days_to_expiration: List of days to expiration.  These are really steps in the 
+                             simulation.  days_in_year is used to convert to years.
+        :param var0: Initial variance in the GARCH simulation
+        :param w:
+        :param a:
+        :param b:
+        :param r: Annualized discount rate
+        :param mu: Daily expected return
+        :param num_sims: Number of simulations to perform
+        :param days_in_year: Used to convert time steps to years for discounting.
+        """
         self._p0 = p0
         self._strikes = np.array(strikes, ndmin=1)
         self._days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
@@ -92,6 +108,7 @@ class GARCHMonteCarlo:
         self._mu = mu
         self._r = r
         self._num_sims = num_sims
+        self._days_in_year = days_in_year
 
         self._min_vol_ratio = .5  # Guard to not allow vol below sqrt(var0)
 
@@ -118,8 +135,10 @@ class GARCHMonteCarlo:
             p_prev = 1.0
             for nd in range(max(self._days_to_expiration)):
                 p = p_prev * (1 + self._mu + np.sqrt(var) * np.random.randn())
-                sr = 1 - p / p_prev  # or should this be lr?
-                var = self._w + self._alpha * sr**2 + self._beta * var
+                #p = p_prev * np.exp(self._mu + np.sqrt(var) * np.random.randn()) # This doesn't seem to match BS as well
+                # sr = p / p_prev - 1  # or should this be lr?
+                lr = np.log(p / p_prev)
+                var = self._w + self._alpha * lr**2 + self._beta * var
                 p_prev = p
                 self._price_paths[nd, n] = p
 
@@ -129,16 +148,19 @@ class GARCHMonteCarlo:
             for i, n_days in enumerate(self._days_to_expiration):
                 # index into self._price_paths is n_day - 1 (e.g. 1 days is 0th index)
 
+                t = n_days / self._days_in_year
+                # Forward price of the underlying asset
+                F = np.exp(self._r * t) * self._p0
                 # Calls
-                idx_itm = self._price_paths[n_days-1, :] * self._p0 > self._strikes[n_strike]
-                idx_otm = self._price_paths[n_days-1, :] * self._p0 <= self._strikes[n_strike]
-                self._call_prices[n_strike, i, idx_itm] = self._price_paths[n_days-1, idx_itm] * self._p0 - self._strikes[n_strike]
+                idx_itm = self._price_paths[n_days-1, :] * F > self._strikes[n_strike]
+                idx_otm = self._price_paths[n_days-1, :] * F <= self._strikes[n_strike]
+                self._call_prices[n_strike, i, idx_itm] = (self._price_paths[n_days-1, idx_itm] * F - self._strikes[n_strike])
                 self._call_prices[n_strike, i, idx_otm] = 0
 
                 # Puts
-                idx_itm = self._price_paths[n_days-1, :] * self._p0 < self._strikes[n_strike]
-                idx_otm = self._price_paths[n_days-1, :] * self._p0 >= self._strikes[n_strike]
-                self._put_prices[n_strike, i, idx_itm] = self._strikes[n_strike] - self._price_paths[n_days-1, idx_itm] * self._p0
+                idx_itm = self._price_paths[n_days-1, :] * F < self._strikes[n_strike]
+                idx_otm = self._price_paths[n_days-1, :] * F >= self._strikes[n_strike]
+                self._put_prices[n_strike, i, idx_itm] = (self._strikes[n_strike] - self._price_paths[n_days-1, idx_itm] * F)
                 self._put_prices[n_strike, i, idx_otm] = 0
 
     def _add_new_days_to_expiration(self, days):
@@ -154,7 +176,8 @@ class GARCHMonteCarlo:
         if days not in self._days_to_expiration and days < max(self._days_to_expiration):
             self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
-        model_price = self._put_prices[idx_strike, idx_days, :].mean()
+        t = days / self._days_in_year
+        model_price = self._put_prices[idx_strike, idx_days, :].mean() * np.exp(-self._r * t)
         # vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
         if expiry is None:
             expiry = days / 365.25
@@ -173,8 +196,9 @@ class GARCHMonteCarlo:
         if days not in self._days_to_expiration and days < max(self._days_to_expiration):
             self._add_new_days_to_expiration(days)
         idx_days = np.where(self._days_to_expiration == days)[0][0]
+        t = days / self._days_in_year
         # vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
-        model_price = self._call_prices[idx_strike, idx_days, :].mean()
+        model_price = self._call_prices[idx_strike, idx_days, :].mean() * np.exp(-self._r * t)
         if expiry is None:
             expiry = days / 365.25
             log.debug(f"expiry not passed to function setting to {expiry}")
@@ -309,3 +333,19 @@ class GARCHMonteCarlo:
             return np.mean(call_prices, axis=2), np.mean(put_prices, axis=2)
         else:
             return call_prices, put_prices
+
+
+class GARCHMonteCarloEarnings(GARCHMonteCarlo):
+
+    def __init__(self,
+            p0, strikes, days_to_expiration, var0, w, alpha, beta, 
+            earnings_move_std: float, earnings_dte: list[int],
+            r=0.015, mu=0, num_sims=5000
+        ):
+        super().__init__(p0, strikes, days_to_expiration, var0, w, alpha, beta, r=0.015, mu=0, num_sims=5000)
+        self._earnings_move_std = earnings_move_std
+        self._earnings_dte = earnings_dte
+
+    def _create_price_paths(self):
+        super()._create_price_paths()
+

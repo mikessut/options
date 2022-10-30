@@ -24,8 +24,8 @@ class Option:
                  metadata={}):
         """
         :param strike: Option strike
-        :param expiry: Either a datetime object of the expiry or a float
-        :param vol: Volatility
+        :param expiry: Either a datetime object of the expiry or a float of time to expiry in years
+        :param vol: Annualized Volatility
         :param und_price: Price of underlying used for pricing calculations
         :param r: Risk free interest rate
         :param bid: Option bid price
