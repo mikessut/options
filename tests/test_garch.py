@@ -214,7 +214,9 @@ def test_fit_garch():
     print(eth_fit, np.sqrt((eth_fit[0] / (1 - eth_fit[1] - eth_fit[2]) * 365.25)))
 
 
-def test_vs_bs():
+@pytest.mark.parametrize('steps_per_year',
+    [252, 365.25])
+def test_vs_bs(steps_per_year):
     """
     Test against Black Scholles use alpha and beta = 0
     """
@@ -223,19 +225,42 @@ def test_vs_bs():
     p = 102.1
     dte = 50
     K = [95, 100, 105]
-    w = iv**2 / 365.25
+    w = iv**2 / steps_per_year
     a, b = 0, 0
-    r = 0.05
+    r = 0.015
     print("r", r)
 
-    g = garch.GARCHMonteCarlo(p, K, dte, w, w, a, b, r=r, num_sims=200000, days_in_year=365.25)
+    g = garch.GARCHMonteCarlo(p, K, dte, w, w, a, b, r=r, num_sims=200000, days_in_year=steps_per_year)
     g.run()
 
-    for k in K:
-        put = PutOption(k, dte / 365.25, iv, und_price=p, r=r)
-        call = CallOption(k, dte / 365.25, iv, und_price=p, r=r)
+    for p in [p, 103.4]:
+        print("und price:", p)
+        g.set_und_price(p)
+        for k in K:
+            put = PutOption(k, dte / steps_per_year, iv, und_price=p, r=r)
+            call = CallOption(k, dte / steps_per_year, iv, und_price=p, r=r)
 
-        print(f"put:  BS / MonteCarlo: {put.BSprice():.3f} {g.put(k, dte):.3f} {g.put(k, dte) - put.BSprice():.3f}")
-        print(f"call: BS / MonteCarlo: {call.BSprice():.3f} {g.call(k, dte):.3f} {g.call(k, dte) - call.BSprice():.3f}")
-        # assert pytest.approx(p.BSprice(), g.put(k, dte), abs=.01)
-        # assert pytest.approx(c.BSprice(), g.call(k, dte), abs=.01)
+            print(f"put:  BS / MonteCarlo: {put.BSprice():.3f} {g.put(k, dte):.3f} {g.put(k, dte) - put.BSprice():.3f}")
+            print(f"call: BS / MonteCarlo: {call.BSprice():.3f} {g.call(k, dte):.3f} {g.call(k, dte) - call.BSprice():.3f}")
+            assert pytest.approx(put.BSprice(), g.put(k, dte), abs=.02)
+            assert pytest.approx(call.BSprice(), g.call(k, dte), abs=.02)
+
+
+def test_earnings():
+    iv = 0.2
+    p = 102.1
+    dte = 50
+    K = [95, 100, 105]
+    w = iv**2 / 252
+    a, b = 0, 0
+    r = 0.015
+    print("r", r)
+
+    g = garch.GARCHMonteCarloEarnings(p, K, dte, w, w, a, b, 
+        0.4, [10, 20],
+        r=r, num_sims=5, days_in_year=252)
+    g.run()
+
+    plt.plot(g._price_paths)
+    # breakpoint()
+    plt.show()
