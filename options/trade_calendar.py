@@ -1,5 +1,8 @@
 import calendar
 import datetime
+import holidays
+
+nyse_holidays = holidays.NYSE()
 
 
 def get_3rd_friday(year, month):
@@ -33,4 +36,28 @@ def get_n_3rd_fridays(start: datetime.date, num):
         year, month = next_month(year, month)
         results.append(get_3rd_friday(year, month))
 
+    return results
+
+
+def iter_trade_days(start: datetime.date):
+    next = start
+    while True:
+        while (next.weekday() == calendar.SATURDAY
+               or next.weekday() == calendar.SUNDAY
+               or next in nyse_holidays):
+            next += datetime.timedelta(days=1)
+        yield next
+        next += datetime.timedelta(days=1)
+
+
+def trade_days(start: datetime.date, stop: datetime.date):
+    """
+    Not inclusive of stop
+    """
+    results = []
+    i = iter_trade_days(start)
+    day = next(i)
+    while day < stop:
+        results.append(day)
+        day = next(i)
     return results
