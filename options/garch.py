@@ -136,12 +136,14 @@ class GARCHMonteCarlo:
             var = self._var0
             p_prev = 1.0
             for nd in range(max(self._days_to_expiration)):
-                p = p_prev * (1 + self._mu + np.sqrt(var) * np.random.randn())
+                # p = p_prev * (1 + self._mu + np.sqrt(var) * np.random.randn())
                 #p = p_prev * np.exp(self._mu + np.sqrt(var) * np.random.randn()) # This doesn't seem to match BS as well
-                sr = p / p_prev - 1  # or should this be lr?
-                lr = np.log(p / p_prev)
+                # sr = p / p_prev - 1  # or should this be lr?
+                # lr = np.log(p / p_prev)
+                sr = self._mu + np.sqrt(var) * np.random.randn()
+                lr = np.log(1 + sr)
                 var = self._w + self._alpha * sr**2 + self._beta * var
-                p_prev = p
+                # p_prev = p
                 self._lrs[nd, n] = lr
                 # self._price_paths[nd, n] = p
 
