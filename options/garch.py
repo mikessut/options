@@ -1,13 +1,16 @@
 import arch
 import numpy as np
 from scipy.optimize import minimize
-from options import portfolio
+from scipy.stats import norm
+from options import portfolio, cython_rec
 import options
 import logging
 import datetime
+import abc
 
 log = logging.getLogger(__name__)
 
+_USE_CYTHON = True
 
 def calc_garch(w, alpha, beta, lr, var0=None):
     var = np.zeros((len(lr),))
@@ -74,20 +77,20 @@ def fit_garch2(historical_price):
     return res.params['omega'] / res.scale**2, res.params['alpha[1]'], res.params['beta[1]']
 
 
-class GARCHMonteCarlo:
+class MonteCarloOptionPricerBase(abc.ABC):
 
-    def __init__(self, p0, strikes, days_to_expiration, var0, w, alpha, beta, 
+    """
+    Base class does not implement _create_lrs(self)"""
+
+    def __init__(self, p0, strikes, tdte, 
                  r=0.015, mu=0, num_sims=5000,
                  days_in_year=365.25):
         """
         :param p0: Initial underlying price
         :param strikes: List of strike prices
-        :param days_to_expiration: List of days to expiration.  These are really steps in the 
+        :param tdte: List of # of trading days to expiration.  These are really steps in the 
                              simulation.  days_in_year is used to convert to years.
         :param var0: Initial variance in the GARCH simulation
-        :param w:
-        :param a:
-        :param b:
         :param r: Annualized discount rate
         :param mu: Daily expected return
         :param num_sims: Number of simulations to perform
@@ -95,23 +98,18 @@ class GARCHMonteCarlo:
         """
         self._p0 = p0
         self._strikes = np.array(strikes, ndmin=1)
-        self._days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
+        self._days_to_expiration = np.array(tdte, ndmin=1, dtype=int)
         self._price_paths = np.zeros((max(self._days_to_expiration), num_sims))
         self._lrs = np.zeros((max(self._days_to_expiration), num_sims))
         self._put_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), num_sims))
         self._call_prices = np.zeros((len(self._strikes), len(self._days_to_expiration), num_sims))
-
-        self._var0 = var0
-        self._w = w
-        self._alpha = alpha
-        self._beta = beta
-        self._long_term_annual_vol = np.sqrt((self._w / (1 - self._alpha - self._beta)) * 365.25)
+        
         self._mu = mu
         self._r = r
         self._num_sims = num_sims
         self._days_in_year = days_in_year
 
-        self._min_vol_ratio = .25  # Guard to not allow vol below sqrt(var0)
+        self._min_vol = .05  # Guard to not allow vol below sqrt(var0)
 
         self._has_run = False
 
@@ -131,21 +129,9 @@ class GARCHMonteCarlo:
     def und_price(self):
         return self._p0
 
+    @abc.abstractmethod
     def _create_lrs(self):
-        for n in range(self._num_sims):
-            var = self._var0
-            p_prev = 1.0
-            for nd in range(max(self._days_to_expiration)):
-                # p = p_prev * (1 + self._mu + np.sqrt(var) * np.random.randn())
-                #p = p_prev * np.exp(self._mu + np.sqrt(var) * np.random.randn()) # This doesn't seem to match BS as well
-                # sr = p / p_prev - 1  # or should this be lr?
-                # lr = np.log(p / p_prev)
-                sr = self._mu + np.sqrt(var) * np.random.randn()
-                lr = np.log(1 + sr)
-                var = self._w + self._alpha * sr**2 + self._beta * var
-                # p_prev = p
-                self._lrs[nd, n] = lr
-                # self._price_paths[nd, n] = p
+        pass
 
     def _create_price_paths(self):
         self._price_paths = np.exp(self._lrs.cumsum(axis=0))
@@ -191,10 +177,10 @@ class GARCHMonteCarlo:
         model_price = self._put_prices[idx_strike, idx_days, :].mean() * np.exp(-self._r * t)
         # vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
         expiry = days / self._days_in_year
-        put = options.PutOption(strike, expiry, self._long_term_annual_vol * self._min_vol_ratio, und_price=self._p0, r=self._r)
+        put = options.PutOption(strike, expiry, self._min_vol, und_price=self._p0, r=self._r)
         bs_price = put.BSprice()
         if bs_price > model_price:
-            log.debug(f"garch.put() BS price is larger than model price. put priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
+            log.debug(f"garch.put() BS price is larger than model price. put priced at: {model_price:.3f} vol: BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
             return bs_price
         return model_price
 
@@ -209,10 +195,10 @@ class GARCHMonteCarlo:
         # vol_annual = np.sqrt(self._var0*365.25) * self._min_vol_ratio
         model_price = self._call_prices[idx_strike, idx_days, :].mean() * np.exp(-self._r * t)
         expiry = days / self._days_in_year
-        call = options.CallOption(strike, expiry, self._long_term_annual_vol * self._min_vol_ratio, und_price=self._p0, r=self._r)
+        call = options.CallOption(strike, expiry, self._min_vol, und_price=self._p0, r=self._r)
         bs_price = call.BSprice()
         if bs_price > model_price:
-            log.debug(f"garch.call() BS price is larger than model price. call priced at: {model_price:.3f} vol: {self._long_term_annual_vol * self._min_vol_ratio:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
+            log.debug(f"garch.call() BS price is larger than model price. call priced at: {model_price:.3f} BSprice: {bs_price:.4f} t: {days/365.25:.5f} expiry: {expiry}")
             return bs_price
         return model_price
 
@@ -312,45 +298,77 @@ class GARCHMonteCarlo:
                 # assert opt_pos.basis < 0, "Something doesn't seem right. Qty is negative but basis is positive???"
                 return 1 - self.call_pop(opt_pos.basis, opt_pos.option.strike, int(np.round(opt_pos.option.t_expiry()*365.25)))
 
-    @staticmethod
-    def garch_monte_carlo(p0, strikes, days_to_expiration,
-                          var0, w, alpha, beta, mu=0, num_sims=1000,
-                          return_avgs=True):
 
-        strikes = np.array(strikes, ndmin=1)
-        days_to_expiration = np.array(days_to_expiration, ndmin=1, dtype=int)
-        put_prices = np.zeros((len(strikes), len(days_to_expiration), num_sims))
-        call_prices = np.zeros((len(strikes), len(days_to_expiration), num_sims))
-        for n in range(num_sims):
-            p_prev = p0
-            var = var0
-            for nd in range(max(days_to_expiration)):
-                p = p_prev * (1 + mu + np.sqrt(var) * np.random.randn())
-                sr = 1 - p / p_prev
-                var = w + alpha * sr**2 + beta * var
-                p_prev = p
-                if (nd+1) in days_to_expiration:
-                    idx = np.where(nd+1 == days_to_expiration)[0]
-                    for m, strike in enumerate(strikes):
-                        put_price = 0 if p > strike else strike - p
-                        call_price = 0 if p < strike else p - strike
-                        put_prices[m, idx, n] = put_price
-                        call_prices[m, idx, n] = call_price
-        if return_avgs:
-            return np.mean(call_prices, axis=2), np.mean(put_prices, axis=2)
+class GARCHMonteCarlo(MonteCarloOptionPricerBase):
+
+    def __init__(self, p0, lr0, strikes, tdte, var0, w, alpha, beta, 
+                 r=0.015, mu=0, num_sims=5000,
+                 days_in_year=365.25):
+        """
+        :param w: GARCH parameters
+        :param alpha:
+        :param beta:
+        """
+        super().__init__(p0, strikes, tdte, r, mu, num_sims, days_in_year)
+        self._var0 = var0
+        self._lr0 = lr0
+        self._w = w
+        self._alpha = alpha
+        self._beta = beta
+
+    def _create_lrs(self):
+        if _USE_CYTHON:
+            cython_rec.garch_create_lrs(self._lrs, self._var0, self._lr0, self._num_sims,
+                                        max(self._days_to_expiration), 
+                                        self._w, self._alpha, self._beta)
         else:
-            return call_prices, put_prices
+            for n in range(self._num_sims):
+                var = self._var0
+                sr = self._lr0
+                r = np.random.randn(max(self._days_to_expiration))
+                for nd in range(max(self._days_to_expiration)):
+                    var = self._w + self._alpha * sr**2 + self._beta * var
+                    sr = self._mu + np.sqrt(var) * r[nd]
+                    lr = np.log(1 + sr)
+                    self._lrs[nd, n] = lr
+
+    @staticmethod
+    def calc_garch(w, alpha, beta, lr, var0=None):
+        var = np.zeros((len(lr),))
+        if var0 is None:
+            # https://stats.stackexchange.com/questions/367722/fitting-a-garch1-1-model
+            var[0] = w / (1 - alpha - beta)
+        else:
+            var[0] = var0
+        for n in range(1, len(lr)):
+            var[n] = w + alpha * lr[n-1]**2 + beta * var[n-1]
+        var[var < 1e-12] = 1e-12
+        return var
+
+    @staticmethod
+    def _neg_logl(w, alpha, beta, lr):
+        sig2 = GARCHMonteCarlo.calc_garch(w, alpha, beta, lr)
+        return -norm(0, np.sqrt(sig2)).logpdf(lr).sum()
+
+    @staticmethod
+    def fit(lr):
+        X = minimize(lambda X, xx: GARCHMonteCarlo._neg_logl(*X, xx), 
+                    [(.2**2 / 252) * (1 - 0.8), 0.1, 0.7],
+                    args=(lr, ),
+                    method = 'Nelder-Mead',
+                    options={'disp': True, 'maxiter': 1000})
+        return {k: v for k, v in zip(['w', 'alpha', 'beta'], X.x)}
 
 
 class GARCHMonteCarloEarnings(GARCHMonteCarlo):
 
     def __init__(self,
-            p0, strikes, days_to_expiration, var0, w, alpha, beta, 
+            p0, lr0, strikes, days_to_expiration, var0, w, alpha, beta, 
             earnings_move_std: float, earnings_days_from_now: list[int],
             r=0.015, mu=0, num_sims=5000, days_in_year=365.25
         ):
-        super().__init__(p0, strikes, days_to_expiration, var0, w, alpha, beta, 
-            r=0.015, mu=mu, num_sims=num_sims, days_in_year=days_in_year)
+        super().__init__(p0, lr0, strikes, days_to_expiration, var0, w, alpha, beta, 
+            r, mu=mu, num_sims=num_sims, days_in_year=days_in_year)
         self._earnings_move_std = earnings_move_std
         self._earnings_days_from_now = earnings_days_from_now
 

@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import logging
+import pathlib
+import timeit
 
 
 def test_garch():
@@ -16,7 +18,8 @@ def test_garch():
     ndays = 53
     strikes = [500, 750, 1000, 1250, 1500, 2000, 3000, 4000]
 
-    g = garch.GARCHMonteCarlo(1150, strikes, ndays, var0, w, alpha, beta)
+    g = garch.GARCHMonteCarlo(1150, 0, strikes, ndays, var0, w, alpha, beta)
+    np.random.seed(1)
     g.run()
 
     # let's look at 2000 strike with bid/ask of 10/18.  Model has price of 24,
@@ -29,132 +32,6 @@ def test_garch():
     return g
 
 
-def test_garch2():
-    w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
-    var0 = 0.002365676345453833
-
-    ndays = 25
-    strikes = [1250]
-
-    g = garch.GARCHMonteCarlo(1152, strikes, ndays, var0, w, alpha, beta)
-    g.run()
-
-    # let's look at 2000 strike with bid/ask of 10/18.  Model has price of 24,
-    # suggesting it's profitable to be long.
-    call_basis = 55  
-    put_basis = 150 # Model value is ~181
-    strike = strikes[0]
-    # This is interesting that even though it is profitable in the long run, it
-    # is only profitable ~5% of the time.
-    # assert g.call_pop(basis, strike, ndays) == pytest.approx(0.055, abs=.005)
-    expiry =  datetime.datetime(2022, 7, 29, 20, tzinfo=pytz.utc)
-    now = expiry - datetime.timedelta(days=ndays)
-    put = PutOption(strike, expiry, multiplier=0.1)
-    call = CallOption(strike, expiry, multiplier=0.1)
-    put._now = now
-    call._now = now
-
-    put_pos = portfolio.OptionPosition(put, 1, put_basis)
-    call_pos = portfolio.OptionPosition(call, 1, call_basis)
-    print(f"Call model value: {g.call(strike, ndays)}")
-    print(f"Call POP: {g.call_pop(call_basis, strike, ndays):.2f} {g.pop(call_pos):.2f}")
-
-    # How much could we increase POP if there was an offsetting delta also
-    # underpriced?
-    print(f"Put model value: {g.put(strike, ndays)}")
-    print(f"Put POP: {g.put_pop(put_basis, strike, ndays):.2f} {g.pop(put_pos):.2f}")
-
-    prt = portfolio.Portfolio([call_pos, put_pos])
-    print(f"POP for put+call portfolio: {g.pop(prt):.2f}")
-    return g
-
-
-def test_garch3():
-    """
-    2022-07-05 22:21:50,935:__main__:I:<LXCallOptionContract 1250.0 0.065 Und: 1141.15 Bid/ask: 40.0 52.0>, 78.13, 26.13 -38.13 iv: 0.74 delta: 0.35 roi_long: 6.22 roi_short: -0.54
-    2022-07-05 22:21:50,962:__main__:I:<LXPutOptionContract 1250.0 0.065 Und: 1141.15 Bid/ask: 200.0 369.8>, 182.83, -186.97 17.17 iv: 1.88 delta: -0.48 roi_long: -10.76 roi_short: 0.25
-    """
-    w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
-    var0 = 0.930**2 / 365
-    und_price = 1141.15
-
-    ndays = 24
-    strikes = [1250]
-
-    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta)
-    g.run()
-
-    # let's look at 2000 strike with bid/ask of 10/18.  Model has price of 24,
-    # suggesting it's profitable to be long.
-    call_basis = 52  
-    put_basis = 200 # Model value is ~181
-    strike = strikes[0]
-    # This is interesting that even though it is profitable in the long run, it
-    # is only profitable ~5% of the time.
-    # assert g.call_pop(basis, strike, ndays) == pytest.approx(0.055, abs=.005)
-    expiry =  datetime.datetime(2022, 7, 29, 20, tzinfo=pytz.utc)
-    now = expiry - datetime.timedelta(days=ndays)
-    put = PutOption(strike, expiry, multiplier=0.1)
-    call = CallOption(strike, expiry, multiplier=0.1)
-    put._now = now
-    call._now = now
-
-    put_pos = portfolio.OptionPosition(put, -1, put_basis)
-    call_pos = portfolio.OptionPosition(call, 1, call_basis)
-    print(f"Call model value: {g.call(strike, ndays)}")
-    print(f"Call POP: {g.call_pop(call_basis, strike, ndays):.2f} {g.pop(call_pos):.2f}")
-
-    # How much could we increase POP if there was an offsetting delta also
-    # underpriced?
-    print(f"Put model value: {g.put(strike, ndays)}")
-    print(f"Put POP: {1-g.put_pop(put_basis, strike, ndays):.2f} {g.pop(put_pos):.2f}")
-
-    prt = portfolio.Portfolio([call_pos, put_pos])
-    print(f"Portfolio model value: {g.portfolio_expected_value(prt)}")
-    print(f"POP for put+call portfolio: {g.pop(prt):.2f}")
-    prt.pnl(1000, 1200)
-    plt.savefig("pnl.png")
-    return g
-
-
-def test_pct_garch():
-    strikes = [750, 1000, 1500, 2000]
-    ndays = [22, 50]
-
-    w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
-    var0 = 0.930**2 / 365
-    und_price = 1141.15
-    nsims = 16000
-
-    call_prices1, put_prices1 = garch.GARCHMonteCarlo.garch_monte_carlo(und_price, strikes, ndays,
-                          var0, w, alpha, beta, mu=0, num_sims=nsims, return_avgs=True)
-
-    print(call_prices1.round(1))
-    print(put_prices1.round(1))
-    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta, num_sims=nsims)
-    g.run()
-
-    print()
-    call_prices2 = np.zeros((len(strikes), len(ndays)))
-    put_prices2 = np.zeros((len(strikes), len(ndays)))
-    for i, strike in enumerate(strikes):
-        for j, nday in enumerate(ndays):
-            call_prices2[i, j] = g.call(strike, nday)
-            put_prices2[i, j] = g.put(strike, nday)
-
-    print("method 2")
-    print(call_prices2.round(1))
-    print(put_prices2.round(1))
-
-    print()
-    print((call_prices1 - call_prices2).round(1))
-    print((put_prices1 - put_prices2).round(1))
-
-    np.testing.assert_allclose(call_prices1, call_prices2, rtol=.05, atol=.5)
-    np.testing.assert_allclose(put_prices1, put_prices2, rtol=.05, atol=.5)
-    return g
-
-
 def test_garch_new_day():
     und_price = 1000
     strikes = 1000
@@ -162,7 +39,7 @@ def test_garch_new_day():
 
     w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
     var0 = 0.930**2 / 365
-    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta, num_sims=10000)
+    g = garch.GARCHMonteCarlo(und_price, 0, strikes, ndays, var0, w, alpha, beta, num_sims=10000)
     g.run()
 
     calls = (g.call(strikes, 10), g.call(strikes, 20))
@@ -186,34 +63,6 @@ def test_garch_new_day():
     # assert False
 
 
-def test_garch_btc():
-    und_price = 20829.7
-    var0 = 0.0029350105294403744
-    w = 0.00026337028025903464
-    alpha = 0.13684325341862802
-    beta = 0.7818352664119537
-
-    g = garch.GARCHMonteCarlo(und_price, 21000, 7, var0, w, alpha, beta, num_sims=10000)
-    g.run()
-
-    print(g.call(21000, 7))
-
-
-def test_fit_garch():
-    btc = pd.read_pickle('tests/BTC.pd')
-    eth = pd.read_pickle('tests/ETH.pd')
-
-    btc['lr'] = np.log(btc.Close / btc.Close.shift())
-    eth['lr'] = np.log(eth.Close / eth.Close.shift())
-
-    print(f"hiv btc: {btc.lr[1:].std() * np.sqrt(365.25)} eth: {eth.lr[1:].std() * np.sqrt(365.25)} ")
-
-    btc_fit = garch.fit_garch2(btc.Close.to_numpy())
-    eth_fit = garch.fit_garch2(eth.Close.to_numpy())
-    print(btc_fit, np.sqrt((btc_fit[0] / (1 - btc_fit[1] - btc_fit[2]) * 365.25)))
-    print(eth_fit, np.sqrt((eth_fit[0] / (1 - eth_fit[1] - eth_fit[2]) * 365.25)))
-
-
 @pytest.mark.parametrize('steps_per_year',
     [252, 365.25])
 def test_vs_bs(steps_per_year):
@@ -224,19 +73,19 @@ def test_vs_bs(steps_per_year):
     iv = 0.2
     p = 102.1
     dte = 50
-    K = [95, 100, 105]
+    K = [90, 95, 100, 105, 110]
     w = iv**2 / steps_per_year
     a, b = 0, 0
     r = 0.015
     print("r", r)
 
-    g = garch.GARCHMonteCarlo(p, K, dte, w, w, a, b, r=r, num_sims=200000, days_in_year=steps_per_year)
+    g = garch.GARCHMonteCarlo(p, 0, K, dte, w, w, a, b, r=r, num_sims=200000, days_in_year=steps_per_year)
     g.run()
 
     for p in [p, 103.4]:
         print("und price:", p)
         g.set_und_price(p)
-        for k in K:
+        for n, k in enumerate(K):
             put = PutOption(k, dte / steps_per_year, iv, und_price=p, r=r)
             call = CallOption(k, dte / steps_per_year, iv, und_price=p, r=r)
 
@@ -246,6 +95,41 @@ def test_vs_bs(steps_per_year):
             assert pytest.approx(call.BSprice(), g.call(k, dte), abs=.02)
 
 
+def test_garch_iv():
+    df = pd.read_csv(pathlib.Path(__file__).parent / "SPY_20171104-20221104.csv")
+    df.index = pd.DatetimeIndex(df.Date) 
+    lr = np.log(df.Close / df.Close.shift())[1:]
+
+    params = garch.GARCHMonteCarlo.fit(lr)
+    print(f"Fit to historical data: {params}")
+
+    p = 102.1
+    dte = 50
+    K = [90, 95, 100, 105, 110]
+    steps_per_year = 252
+    r = .015
+
+    g = garch.GARCHMonteCarlo(p, -0.02, K, dte, .2**2 / 252, **params, r=r, num_sims=200000, days_in_year=steps_per_year)
+    g.run()
+
+    ivs = np.zeros((len(K), 2))
+
+    for n, k in enumerate(K):
+        put = PutOption(k, dte / steps_per_year, und_price=p, r=r)
+        call = CallOption(k, dte / steps_per_year, und_price=p, r=r)
+
+        ivs[n, 0] = call.IV(g.call(k, dte))
+        ivs[n, 1] = put.IV(g.put(k, dte))
+    
+    plt.figure()
+    moneyness = np.log(p / np.array(K))
+    plt.plot(moneyness, ivs[:, 0], 'o', label='calls')
+    plt.plot(moneyness, ivs[:, 1], 'x', label='puts')
+    plt.legend()
+    plt.savefig("garch_iv.png")
+
+
+# @pytest.mark.skip("plots")
 def test_earnings():
     iv = 0.2
     p = 102.1
@@ -256,11 +140,37 @@ def test_earnings():
     r = 0.015
     print("r", r)
 
-    g = garch.GARCHMonteCarloEarnings(p, K, dte, w, w, a, b, 
+    g = garch.GARCHMonteCarloEarnings(p, 0, K, dte, w, w, a, b, 
         0.4, [10, 20],
         r=r, num_sims=5, days_in_year=252)
     g.run()
 
     plt.plot(g._price_paths)
     # breakpoint()
-    plt.show()
+    # plt.show()
+    plt.savefig("earnings_garch.png")
+
+
+def benchmark_cython():
+    df = pd.read_csv(pathlib.Path(__file__).parent / "SPY_20171104-20221104.csv")
+    df.index = pd.DatetimeIndex(df.Date) 
+    lr = np.log(df.Close / df.Close.shift())[1:]
+
+    params = garch.GARCHMonteCarlo.fit(lr)
+    print(f"Fit to historical data: {params}")
+
+    p = 102.1
+    dte = 50
+    K = [90, 95, 100, 105, 110]
+    steps_per_year = 252
+    r = .015
+
+    g = garch.GARCHMonteCarlo(p, -0.02, K, dte, .2**2 / 252, **params, r=r, num_sims=200000, days_in_year=steps_per_year)
+    g_c = garch.GARCHMonteCarlo(p, -0.02, K, dte, .2**2 / 252, **params, r=r, num_sims=200000, days_in_year=steps_per_year)
+
+    garch._USE_CYTHON = False
+    print("python: ", timeit.timeit(g.run, number=1))
+    garch._USE_CYTHON = True
+    print("cython: ", timeit.timeit(g_c.run, number=1))
+
+    print(g.call(90, 50), g_c.call(90, 50))
