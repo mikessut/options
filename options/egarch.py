@@ -58,7 +58,7 @@ class EGARCHMonteCarlo(MonteCarloOptionPricerBase):
         return theta * e + lam * (np.abs(e) - np.sqrt(2 / np.pi))
 
     @staticmethod
-    def calc_egarch(lr, omega, alpha, theta, lam):
+    def calc_garch(lr, omega, alpha, theta, lam):
         lsig2 = np.zeros((len(lr), )) * np.nan
         lsig2[0] = omega / (1 - alpha)
 
@@ -70,7 +70,7 @@ class EGARCHMonteCarlo(MonteCarloOptionPricerBase):
 
     @staticmethod
     def _neg_logl(omega, alpha, theta, lam, lr):
-        sig2 = EGARCHMonteCarlo.calc_egarch(lr, omega, alpha, theta, lam)
+        sig2 = EGARCHMonteCarlo.calc_garch(lr, omega, alpha, theta, lam)
         # return - (-np.log(sig2) - lr**2 / sig2).sum()
         return -norm(0, np.sqrt(sig2)).logpdf(lr).sum()  # Yes, this seems to give similar results!!!
 
@@ -82,6 +82,16 @@ class EGARCHMonteCarlo(MonteCarloOptionPricerBase):
                     method = 'Nelder-Mead',
                     options={'disp': True, 'maxiter': 1000})
         return {k: v for k, v in zip(['omega', 'alpha', 'theta', 'lam'], X.x)}
+
+    def long_term_vol(*args, omega=None, alpha=None, theta=None, lam=None):
+        """
+        The shenanigans here are to make this both a static or instance method.
+        """
+        if len(args) == 1:
+            self = args[0]
+            return np.sqrt(np.exp(self._omega / (1 - self._alpha)) * 252)
+        else:
+            return np.sqrt(np.exp(omega / (1 - alpha)) * 252)
 
 
 class EGARCHMonteCarloEarnings(EGARCHMonteCarlo):

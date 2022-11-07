@@ -359,6 +359,16 @@ class GARCHMonteCarlo(MonteCarloOptionPricerBase):
                     options={'disp': True, 'maxiter': 1000})
         return {k: v for k, v in zip(['w', 'alpha', 'beta'], X.x)}
 
+    def long_term_vol(*args, w=None, alpha=None, beta=None):
+        """
+        The shenanigans here are to make this both a static or instance method.
+        """
+        if len(args) == 1:
+            self = args[0]
+            return np.sqrt(self._w / (1 - self._alpha - self._beta) * 252)
+        else:
+            return np.sqrt(w / (1 - alpha - beta) * 252)
+
 
 class GARCHMonteCarloEarnings(GARCHMonteCarlo):
 
