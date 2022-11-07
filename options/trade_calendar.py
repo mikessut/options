@@ -50,7 +50,7 @@ def iter_trade_days(start: datetime.date):
         next += datetime.timedelta(days=1)
 
 
-def trade_days(start: datetime.date, stop: datetime.date):
+def trade_days(start: datetime.date, stop: datetime.date) -> list[datetime.date]:
     """
     Not inclusive of stop
     """
