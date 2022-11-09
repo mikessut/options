@@ -93,6 +93,19 @@ class EGARCHMonteCarlo(MonteCarloOptionPricerBase):
         else:
             return np.sqrt(np.exp(omega / (1 - alpha)) * 252)
 
+    @property
+    def params(self):
+        return {
+            'omega': self._omega,
+            'alpha': self._alpha,
+            'theta': self._theta,
+            'lam': self._lam
+        }
+
+    @property
+    def var0(self):
+        return self._var0
+
 
 class EGARCHMonteCarloEarnings(EGARCHMonteCarlo):
 

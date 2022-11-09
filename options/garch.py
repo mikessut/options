@@ -369,6 +369,18 @@ class GARCHMonteCarlo(MonteCarloOptionPricerBase):
         else:
             return np.sqrt(w / (1 - alpha - beta) * 252)
 
+    @property
+    def params(self):
+        return {
+            'w': self._w,
+            'alpha': self._alpha,
+            'beta': self._beta
+        }
+
+    @property
+    def var0(self):
+        return self._var0
+
 
 class GARCHMonteCarloEarnings(GARCHMonteCarlo):
 
