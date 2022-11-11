@@ -309,7 +309,7 @@ class PutOption(Option):
         Cash secured at strike price.
         """
         PV = self.strike - self.bid
-        FV = self.strike - self.model_price()
+        FV = self.strike - self.model_price
         return np.log(FV / PV) / self.t_expiry()
 
 
@@ -367,7 +367,7 @@ class CallOption(Option):
         "Covered call" - secured by holding underlying at current undlying price.
         """
         PV = self.und_price - self.bid
-        FV = self.und_price - self.model_price()
+        FV = self.und_price - self.model_price
         return np.log(FV / PV) / self.t_expiry()
 
 
