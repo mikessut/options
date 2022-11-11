@@ -44,6 +44,16 @@ def test_greeks():
   assert pytest.approx(p.theta(), abs=.0001) == -26.39825
 
 
+def test_r():
+  for r, put_val, call_val in zip([.015, .1],
+                                  [12.65596, 11.96739],
+                                  [2.82083, 3.06191]):
+    c = options.CallOption(110, expiry=.1, und_bid=100, und_ask=100, vol=.5, r=r)
+    p = options.PutOption(110, expiry=0.1, und_bid=100, und_ask=100, vol=.5, r=r)
+    assert pytest.approx(c.BSprice() , call_val, abs=.0001)
+    assert pytest.approx(p.BSprice() , put_val, abs=.0001)
+
+
 def test_deep_itm_call():
   und_price = 1563.555
   expiry = 0.027727499601870865

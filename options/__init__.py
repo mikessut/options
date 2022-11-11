@@ -24,8 +24,8 @@ class Option:
                  metadata={}):
         """
         :param strike: Option strike
-        :param expiry: Either a datetime object of the expiry or a float
-        :param vol: Volatility
+        :param expiry: Either a datetime object of the expiry or a float of time to expiry in years
+        :param vol: Annualized Volatility
         :param und_price: Price of underlying used for pricing calculations
         :param r: Risk free interest rate
         :param bid: Option bid price
@@ -138,8 +138,15 @@ class Option:
     # def set_und_price(self, val):
     #     self._und_price = val
 
-    def extrinsic_val(self) -> float:
-        return self.price - self.intrinsic_val()
+    def extrinsic_val(self, method='mid') -> float:
+        if method == 'mid':
+            return self.price - self.intrinsic_val()
+        elif method == 'bid':
+            return self.bid - self.intrinsic_val()
+        elif method == 'ask':
+            return self.ask - self.intrinsic_val()
+        else:
+            raise ValueError("Unknown method for extrinsic_val()")
 
     @property
     def expiry(self) -> datetime.datetime:
