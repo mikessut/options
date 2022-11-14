@@ -393,6 +393,7 @@ class GARCHMonteCarloEarnings(GARCHMonteCarlo):
             r, mu=mu, num_sims=num_sims, days_in_year=days_in_year)
         self._earnings_move_std = earnings_move_std
         self._earnings_days_from_now = earnings_days_from_now
+        log.info(f"{self.__class__.__name__} earnings days from now: {self._earnings_days_from_now}")
 
     def _create_lrs(self):
         super()._create_lrs()
