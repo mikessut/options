@@ -1,6 +1,10 @@
 import calendar
 import datetime
 import holidays
+import pytz
+
+
+denver_tz = pytz.timezone("America/Denver")
 
 nyse_holidays = holidays.NYSE()
 
@@ -61,3 +65,20 @@ def trade_days(start: datetime.date, stop: datetime.date) -> list[datetime.date]
         results.append(day)
         day = next(i)
     return results
+
+
+def market_open(date: datetime.datetime=None) -> bool:
+    """
+    tz aware date
+
+    Naive... Won't account for half days.
+    """
+    if date is None:
+        date = pytz.utc.localize(datetime.datetime.utcnow())
+    date_den = date.astimezone(denver_tz)
+    if (date_den.date() not in nyse_holidays and
+        (date_den.time() >= datetime.time(7, 30)) and
+        (date_den.time() < datetime.time(14, 0))):
+        return True
+    else:
+        return False
