@@ -189,7 +189,9 @@ class Option:
             if price < self.BSprice(vol=1e-6, r=r, t=t, und_price=und_price):
                 # price = np.mean([self.intrinsic_val(), self.ask])
                 # price = self.intrinsic_val()
-                raise ValueError("price is less than vol=0 price")
+                # raise ValueError(f"price {price} is less than vol=0 price")
+                log.error(f"{self} price {price} is less than vol=0 price")
+                return 1e-6
         try:
             sol = root_scalar(lambda vol: self.BSprice(vol=vol, r=r, t=t, und_price=und_price) - price,
                             method='bisect',
