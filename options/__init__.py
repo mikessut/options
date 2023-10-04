@@ -171,6 +171,15 @@ class Option:
     @property
     def multiplier(self):
         return self._multiplier
+    
+    def set_strike_from_delta(self, delta):
+        def delta_err(K):
+            self._strike = K
+            return self.delta() - delta
+        
+        sol = root_scalar(delta_err, x0=self._strike, x1=self._strike * 1.1)
+        self._strike = sol.root
+        return self._strike
 
     def BScalc(self, vol, t, r, und_price):
         if not all([np.isfinite(x) for x in [vol, t, r, und_price]]):

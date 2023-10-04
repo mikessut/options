@@ -100,12 +100,13 @@ def plot_test():
 def test_garch_portfolio():
     w, alpha, beta = (0.00026337028025903464, 0.13684325341862802, 0.7818352664119537)
     var0 = 0.930**2 / 365
+    lr0 = .1
 
     und_price = 1255
     strikes = 1250
     ndays = 14
 
-    g = garch.GARCHMonteCarlo(und_price, strikes, ndays, var0, w, alpha, beta, num_sims=10000)
+    g = garch.GARCHMonteCarlo(und_price, lr0, strikes, ndays, var0, w, alpha, beta, num_sims=10000)
     g.run()
 
     c = CallOption(strikes, 14/365.25)

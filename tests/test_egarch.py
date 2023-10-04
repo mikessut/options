@@ -22,7 +22,7 @@ def test_egarch():
     
     ax[0].plot(df.Close)
     ax[1].plot(lr)
-    ax[2].plot(pd.Series(np.sqrt(egarch.EGARCHMonteCarlo.calc_egarch(lr, **params) * 252), lr.index), label='egarch')
+    ax[2].plot(pd.Series(np.sqrt(egarch.EGARCHMonteCarlo.calc_garch(lr, **params) * 252), lr.index), label='egarch')
     # multi = MultiCursor(f.canvas, ax, horizOn=True)
 
     # plt.show()

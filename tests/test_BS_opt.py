@@ -62,3 +62,16 @@ def test_deep_itm_call():
 
   print(c.IV())
   return c
+
+
+def test_find_strike():
+  c = options.CallOption(90, 2 / 12, .18, und_price=100)
+  print(c.set_strike_from_delta(0.5))
+  p0 = c.BSprice()
+  c.und_price += .01
+  p1 = c.BSprice()
+  print((p1 - p0) / .01)
+  assert pytest.approx(0.5, .001) == (p1 - p0) / .01
+  print(c._strike)
+  print(c.und_price)
+  print(c._r)
