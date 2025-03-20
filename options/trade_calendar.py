@@ -9,13 +9,21 @@ denver_tz = pytz.timezone("America/Denver")
 nyse_holidays = holidays.NYSE()
 
 
-def get_3rd_friday(year, month):
+def get_3rd_friday(year, month) -> datetime.date:
     cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
 
     month_cal = cal.monthdatescalendar(year, month)
     return [day for week in month_cal 
                 for day in week 
                     if day.weekday() == calendar.FRIDAY and day.month == month][2]
+
+
+def get_next_3rd_friday(start: datetime.date) -> datetime.date:
+    this_mon = get_3rd_friday(start.year, start.month)
+    if this_mon > start:
+        return this_mon
+    else:
+        return get_3rd_friday(*next_month(start.year, start.month))
 
 
 def next_month(year, month):
