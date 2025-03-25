@@ -2,20 +2,25 @@ import calendar
 import datetime
 import holidays
 import pytz
+import yaml
+import pathlib
 
 
 denver_tz = pytz.timezone("America/Denver")
 
 nyse_holidays = holidays.NYSE()
 
+OVERRIDE_DAYS = yaml.safe_load(open(pathlib.Path(__file__).parent / 'override.yml'))
+
 
 def get_3rd_friday(year, month) -> datetime.date:
     cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
 
     month_cal = cal.monthdatescalendar(year, month)
-    return [day for week in month_cal 
+    date = [day for week in month_cal 
                 for day in week 
                     if day.weekday() == calendar.FRIDAY and day.month == month][2]
+    return OVERRIDE_DAYS.get(date, date)
 
 
 def get_next_3rd_friday(start: datetime.date) -> datetime.date:
@@ -24,6 +29,13 @@ def get_next_3rd_friday(start: datetime.date) -> datetime.date:
         return this_mon
     else:
         return get_3rd_friday(*next_month(start.year, start.month))
+    
+
+def get_next_friday(start: datetime.date) -> datetime.date:
+    day = start
+    while day.weekday() != calendar.FRIDAY:
+        day += datetime.timedelta(days=1)
+    return OVERRIDE_DAYS.get(day, day)
 
 
 def next_month(year, month):
@@ -51,15 +63,28 @@ def get_n_3rd_fridays(start: datetime.date, num):
     return results
 
 
-def iter_trade_days(start: datetime.date):
+def iter_trade_days(start: datetime.date, direction=1):
+    assert direction in [1, -1]
     next = start
     while True:
         while (next.weekday() == calendar.SATURDAY
                or next.weekday() == calendar.SUNDAY
                or next in nyse_holidays):
-            next += datetime.timedelta(days=1)
+            next += datetime.timedelta(days=1) * direction
         yield next
-        next += datetime.timedelta(days=1)
+        next += datetime.timedelta(days=1) * direction
+
+
+def next_trade_day(start: datetime.date):
+    i = iter_trade_days(start)
+    next(i)
+    return next(i)
+
+
+def prev_trade_day(start: datetime.date):
+    i = iter_trade_days(start, -1)
+    next(i)
+    return next(i)
 
 
 def trade_days(start: datetime.date, stop: datetime.date) -> list[datetime.date]:
