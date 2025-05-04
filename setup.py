@@ -16,5 +16,6 @@ setup(name='Options',
       install_requires=['arch', 'numpy', 'scipy', 'holidays'],
       ext_modules=cythonize('options/cython_rec.pyx'),
       include_dirs=[numpy.get_include()],
-      include_package_data=True
+      include_package_data=True,
+      package_data={'options': ['override.yml']}
       )
